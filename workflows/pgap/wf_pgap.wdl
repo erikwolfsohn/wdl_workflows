@@ -184,7 +184,7 @@ task pgap_annotate {
     } 
 
     runtime {
-        docker: "pgapwf:1.0"
+        docker: "ewolfsohn/pgapwf:2023-10-03.build7061"
         memory:"~{memory} GB"
         cpu: "~{cpu}"
         disks: "local-disk ~{disk_size} SSD"
