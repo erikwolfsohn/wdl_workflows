@@ -77,8 +77,8 @@ task pgap_annotate {
         File assembly_fasta
         File supplemental_data
         String taxon
-        String ignore_errors = true
-        String report_usage = false
+        String ignore_errors = 'true'
+        String report_usage = 'false'
         Int cpu = 8
         Int memory = 32
         Int disk_size = 100
