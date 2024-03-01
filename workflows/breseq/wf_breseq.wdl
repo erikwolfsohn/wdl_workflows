@@ -39,12 +39,12 @@ workflow breseq_workflow {
   }
 
   output {
-        File? summary = breseq_task.summary
-        File? marginal_predictions = breseq_task.marginal_predictions
-        File? mutation_predictions = breseq_task.mutation_predictions
-        File? log = breseq_task.log
-        File? gdtools_output = breseq_task.gdtools_output
-        File? output_archive = breseq_task.output_archive
+        File? breseq_summary = breseq_task.summary
+        File? breseq_marginal_predictions = breseq_task.marginal_predictions
+        File? breseq_mutation_predictions = breseq_task.mutation_predictions
+        File? breseq_log = breseq_task.log
+        File? breseq_gdtools_output = breseq_task.gdtools_output
+        File? breseq_output_archive = breseq_task.output_archive
     }
 }
 
@@ -95,12 +95,12 @@ task breseq_task {
   >>>
 
   output {
-    File? summary = "output/summary.html"
-    File? marginal_predictions = "output/marginal.html"
-    File? mutation_predictions = "output/index.html"
-    File? log = "output/log.txt"
-    File? gdtools_output = "output/output.gd"
-    File? output_archive = "~{sample_id}_predictions.tar.gz"
+    File? breseq_summary = "output/summary.html"
+    File? breseq_marginal_predictions = "output/marginal.html"
+    File? breseq_mutation_predictions = "output/index.html"
+    File? breseq_log = "output/log.txt"
+    File? breseq_gdtools_output = "output/output.gd"
+    File? breseq_output_archive = "~{sample_id}_predictions.tar.gz"
   }
 
   runtime {
