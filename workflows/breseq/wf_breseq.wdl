@@ -39,12 +39,12 @@ workflow breseq_workflow {
   }
 
   output {
-        File? breseq_summary = breseq_task.summary
-        File? breseq_marginal_predictions = breseq_task.marginal_predictions
-        File? breseq_mutation_predictions = breseq_task.mutation_predictions
-        File? breseq_log = breseq_task.log
-        File? breseq_gdtools_output = breseq_task.gdtools_output
-        File? breseq_output_archive = breseq_task.output_archive
+        File? breseq_summary = breseq_task.breseq_summary
+        File? breseq_marginal_predictions = breseq_task.breseq_marginal_predictions
+        File? breseq_mutation_predictions = breseq_task.breseq_mutation_predictions
+        File? breseq_log = breseq_task.breseq_log
+        File? breseq_gdtools_output = breseq_task.breseq_gdtools_output
+        File? breseq_output_archive = breseq_task.breseq_output_archive
     }
 }
 
