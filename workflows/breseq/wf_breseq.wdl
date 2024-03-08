@@ -86,20 +86,18 @@ task breseq_task {
   ~{true='-x' false='' nanopore_reads} \
   ~{read1} ~{read2}
 
-  tar -cvzf ~{sample_id}_predictions.tar.gz \
-  output/summary.html \
-  output/marginal.html \
-  output/index.html \
-  output/log.txt \
-  output/output.gd
+  tar -cvzf ~{sample_id}_predictions.tar.gz output
+
+  mv output/{summary.html,marginal.html,index.html,log.txt,output.gd} . &&\
+  bash -c 'rename_id="~{sample_id}_"; for file in "$@"; do [ -e "$file" ] && mv -- "$file" "${rename_id}${file}"; done; exit 0' -- summary.html marginal.html index.html log.txt output.gd
   >>>
 
   output {
-    File? breseq_summary = "output/summary.html"
-    File? breseq_marginal_predictions = "output/marginal.html"
-    File? breseq_mutation_predictions = "output/index.html"
-    File? breseq_log = "output/log.txt"
-    File? breseq_gdtools_output = "output/output.gd"
+    File? breseq_summary = "~{sample_id}_summary.html"
+    File? breseq_marginal_predictions = "~{sample_id}_marginal.html"
+    File? breseq_mutation_predictions = "~{sample_id}_index.html"
+    File? breseq_log = "~{sample_id}_log.txt"
+    File? breseq_gdtools_output = "~{sample_id}_output.gd"
     File? breseq_output_archive = "~{sample_id}_predictions.tar.gz"
   }
 
