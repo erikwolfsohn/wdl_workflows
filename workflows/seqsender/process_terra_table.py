@@ -6,6 +6,7 @@ from typing import Optional, Tuple
 import numpy as np
 import pandas as pd
 from datetime import datetime
+import argparse
 
 
 def remove_nas(entity_id, table, required_metadata):
@@ -123,7 +124,7 @@ def filter_table_by_sra(table, static_metadata, repository_column_map, entity_id
 	filtered_table_df["sra-file_1"] = filtered_table_df["sra-file_1"].map(lambda filename: filename.split('/').pop())
 	if cloud_uri:
 		filtered_table_df["sra-file_1"] = filtered_table_df["sra-file_1"].map(lambda filename: cloud_uri + filename if pd.notna(filename) else filename)
-	filtered_table_df["sra-file_1"].to_csv("/home/ewolfsohn/git_repositories/public_health_bioinformatics/tasks/utilities/submission/filepaths.csv", index=False, header=False) # make a file that contains the names of all the reads so we can use gsutil -m cp
+	filtered_table_df["sra-file_1"].to_csv(f'{outdir}/filepaths.csv', index=False, header=False) # make a file that contains the names of all the reads so we can use gsutil -m cp
 	if "sra-file_2" in filtered_table_df.columns:
 		if cloud_uri:
 			filtered_table_df["sra-file_1"] = filtered_table_df["sra-file_1"].map(lambda filename: cloud_uri + filename if pd.notna(filename) else filename)
@@ -239,29 +240,53 @@ def main(tablename, biosample_schema, static_metadata_file, repository_column_ma
 	columns_to_remove = [f'gs-{entity_id}', f'bs-{entity_id}', entity_id, f'sra-{entity_id}']
 	columns_to_remove = [col for col in columns_to_remove if col in merged_metadata_tables.columns]
 	merged_metadata_tables.drop(columns=columns_to_remove, inplace=True)
-	print(merged_metadata_tables.columns)
+	#print(merged_metadata_tables.columns)
 	merged_metadata_tables.to_csv(f'{outdir}/merged_metadata.csv', header = True, index = False, sep = ",")
 
-	merged_columns = merged_metadata_tables.columns
-	orig_columns = "sequence_name,organism,authors,collection_date,bioproject,bs-sample_name,bs-collected_by,bs-geo_loc_name,bs-host,bs-host_disease,bs-isolate,bs-isolation_source,sra-sample_name,sra-file_location,sra-library_name,sra-file_1,sra-library_strategy,sra-library_source,sra-library_selection,sra-library_layout,sra-platform,sra-instrument_model,sra-design_description,gs-sample_name,gs-covv_type,gs-covv_passage,gs-covv_location,gs-covv_add_location,gs-covv_host,gs-covv_add_host_info,gs-covv_sampling_strategy,gs-covv_gender,gs-covv_patient_age,gs-covv_patient_status,gs-covv_specimen,gs-covv_outbreak,gs-covv_last_vaccinated,gs-covv_treatment,gs-covv_seq_technology,gs-covv_assembly_method,gs-covv_coverage,gs-covv_orig_lab,gs-covv_orig_lab_addr,gs-covv_provider_sample_id,gs-covv_subm_lab,gs-covv_subm_lab_addr,gs-covv_subm_sample_id,gs-covv_consortium,gs-covv_comment,gs-comment_type"
+	#merged_columns = merged_metadata_tables.columns
+	#orig_columns = "sequence_name,organism,authors,collection_date,bioproject,bs-sample_name,bs-collected_by,bs-geo_loc_name,bs-host,bs-host_disease,bs-isolate,bs-isolation_source,sra-sample_name,sra-file_location,sra-library_name,sra-file_1,sra-library_strategy,sra-library_source,sra-library_selection,sra-library_layout,sra-platform,sra-instrument_model,sra-design_description,gs-sample_name,gs-covv_type,gs-covv_passage,gs-covv_location,gs-covv_add_location,gs-covv_host,gs-covv_add_host_info,gs-covv_sampling_strategy,gs-covv_gender,gs-covv_patient_age,gs-covv_patient_status,gs-covv_specimen,gs-covv_outbreak,gs-covv_last_vaccinated,gs-covv_treatment,gs-covv_seq_technology,gs-covv_assembly_method,gs-covv_coverage,gs-covv_orig_lab,gs-covv_orig_lab_addr,gs-covv_provider_sample_id,gs-covv_subm_lab,gs-covv_subm_lab_addr,gs-covv_subm_sample_id,gs-covv_consortium,gs-covv_comment,gs-comment_type"
+#
+	#columns_merged = set(merged_columns)
+	#columns_orig = set(orig_columns.split(","))
+#
+	#columns_in_merged_not_in_orig = columns_merged - columns_orig
+	#columns_in_orig_not_in_merged = columns_orig - columns_merged
+#
+	#print(columns_in_merged_not_in_orig)
+	#print(columns_in_orig_not_in_merged)
 
-	columns_merged = set(merged_columns)
-	columns_orig = set(orig_columns.split(","))
-
-	columns_in_merged_not_in_orig = columns_merged - columns_orig
-	columns_in_orig_not_in_merged = columns_orig - columns_merged
-
-	print(columns_in_merged_not_in_orig)
-	print(columns_in_orig_not_in_merged)
+#if __name__ == '__main__':
+#	main(
+#		tablename='/home/ewolfsohn/git_repositories/public_health_bioinformatics/tasks/utilities/submission/seqsender_test.tsv',
+#		biosample_schema='/home/ewolfsohn/git_repositories/public_health_bioinformatics/tasks/utilities/submission/SARS-CoV-2.cl.1.0.xml',
+#		static_metadata_file='/home/ewolfsohn/git_repositories/public_health_bioinformatics/tasks/utilities/submission/static_metadata.csv',
+#		repository_column_map_file='/home/ewolfsohn/git_repositories/public_health_bioinformatics/tasks/utilities/submission/repository_column_map.csv',
+#		entity_id='entity:seqsender_test_id',
+#		outdir = '/home/ewolfsohn/git_repositories/public_health_bioinformatics/tasks/utilities/submission',
+#		db_selection = ['bs','sra'],
+#		cloud_uri = 'gs://theiagen_sra_transfer/'
+#	)
 
 if __name__ == '__main__':
+	parser = argparse.ArgumentParser(description="Process Terra tables for seqsender repository submission.")
+	parser.add_argument('tablename', type=str, help='Path to the table file')
+	parser.add_argument('biosample_schema', type=str, help='Path to the biosample schema file')
+	parser.add_argument('static_metadata_file', type=str, help='Path to the static metadata file')
+	parser.add_argument('repository_column_map_file', type=str, help='Path to the repository column map file')
+	parser.add_argument('entity_id', type=str, help='Entity ID to use')
+	parser.add_argument('outdir', type=str, help='Output directory')
+	parser.add_argument('--db_selection', type=str, nargs='+', help='Databases to select', default=[])
+	parser.add_argument('--cloud_uri', type=str, help='Cloud URI, if any', default=None)
+
+	args = parser.parse_args()
+
 	main(
-		tablename='/home/ewolfsohn/git_repositories/public_health_bioinformatics/tasks/utilities/submission/seqsender_test.tsv',
-		biosample_schema='/home/ewolfsohn/git_repositories/public_health_bioinformatics/tasks/utilities/submission/SARS-CoV-2.cl.1.0.xml',
-		static_metadata_file='/home/ewolfsohn/git_repositories/public_health_bioinformatics/tasks/utilities/submission/static_metadata.csv',
-		repository_column_map_file='/home/ewolfsohn/git_repositories/public_health_bioinformatics/tasks/utilities/submission/repository_column_map.csv',
-		entity_id='entity:seqsender_test_id',
-		outdir = '/home/ewolfsohn/git_repositories/public_health_bioinformatics/tasks/utilities/submission',
-		db_selection = ['bs','sra'],
-		cloud_uri = 'gs://theiagen_sra_transfer/'
+		tablename=args.tablename,
+		biosample_schema=args.biosample_schema,
+		static_metadata_file=args.static_metadata_file,
+		repository_column_map_file=args.repository_column_map_file,
+		entity_id=args.entity_id,
+		outdir=args.outdir,
+		db_selection=args.db_selection,
+		cloud_uri=args.cloud_uri
 	)
