@@ -198,36 +198,51 @@ def main(tablename, biosample_schema, static_metadata_file, repository_column_ma
 
 	if 'bs' in db_selection:
 		biosample_filtered_table, missing_biosample, mandatory_biosample_list = filter_table_by_biosample(table, biosample_schema, static_metadata, repository_column_map, entity_id)
+		print(f"Missing Biosample fields: {missing_biosample}")
+		biosample_filtered_table.to_csv(f'{outdir}/biosample_table.csv', header = True, index = False, sep = ",")
 	if 'sra' in db_selection:
 		sra_filtered_table, missing_sra, mandatory_sra_list = filter_table_by_sra(table, static_metadata, repository_column_map, entity_id, outdir, cloud_uri)
+		print(f"Missing SRA fields: {missing_sra}")
+		sra_filtered_table.to_csv(f'{outdir}/sra_table.csv', header = True, index = False, sep = ",")
 	if 'gs' in db_selection:
 		gisaid_filtered_table, missing_gisaid, mandatory_gisaid_list = filter_table_by_gisaid_cov(table, static_metadata, repository_column_map, entity_id)
+		print(f"Missing GISAID fields: {missing_gisaid}")
+		gisaid_filtered_table.to_csv(f'{outdir}/gisaid_table.csv', header = True, index = False, sep = ",")
 	shared_filtered_table, missing_shared, mandatory_shared_list = filter_table_by_shared(table, static_metadata, repository_column_map, entity_id)
+	print(f"Missing Shared fields: {missing_shared}")
+	shared_filtered_table.to_csv(f'{outdir}/shared_table.csv', header = True, index = False, sep = ",")
 
-
-	merged_metadata_tables1 = pd.merge(shared_filtered_table, biosample_filtered_table, left_on=entity_id, right_on = f'bs-{entity_id}', how='outer')
-	merged_metadata_tables2 = pd.merge(merged_metadata_tables1, sra_filtered_table, left_on=entity_id, right_on = f'sra-{entity_id}', how='outer')
-	merged_metadata_tables3 = pd.merge(merged_metadata_tables2, gisaid_filtered_table, left_on=entity_id, right_on = f'gs-{entity_id}', how='outer')
-
-
-	columns_to_remove = [f'gs-{entity_id}', f'bs-{entity_id}', entity_id, f'sra-{entity_id}']
-	merged_metadata_tables3.drop(columns=columns_to_remove, inplace=True)
+	# figure out a better way to do this
+	if 'gs' in db_selection and 'bs' not in db_selection and 'sra' not in db_selection:
+		merged_metadata_tables = pd.merge(shared_filtered_table, gisaid_filtered_table, left_on=entity_id, right_on = f'gs-{entity_id}', how='outer')
+	elif 'bs' in db_selection and 'gs' not in db_selection and 'sra' not in db_selection:
+		merged_metadata_tables = pd.merge(shared_filtered_table, biosample_filtered_table, left_on=entity_id, right_on = f'gs-{entity_id}', how='outer')
+	elif 'sra' in db_selection and 'gs' not in db_selection and 'bs' not in db_selection:
+		merged_metadata_tables = pd.merge(shared_filtered_table, sra_filtered_table, left_on=entity_id, right_on = f'gs-{entity_id}', how='outer')
+	elif 'gs' not in db_selection and 'bs' in db_selection and 'sra' in db_selection:
+		merged_metadata_tables1 = pd.merge(shared_filtered_table, biosample_filtered_table, left_on=entity_id, right_on = f'bs-{entity_id}', how='outer')
+		merged_metadata_tables = pd.merge(merged_metadata_tables1, sra_filtered_table, left_on=entity_id, right_on = f'sra-{entity_id}', how='outer')
+	elif 'gs' in db_selection and 'bs' in db_selection and 'sra' in db_selection:
+		merged_metadata_tables1 = pd.merge(shared_filtered_table, biosample_filtered_table, left_on=entity_id, right_on = f'bs-{entity_id}', how='outer')
+		merged_metadata_tables2 = pd.merge(merged_metadata_tables1, sra_filtered_table, left_on=entity_id, right_on = f'sra-{entity_id}', how='outer')
+		merged_metadata_tables = pd.merge(merged_metadata_tables2, gisaid_filtered_table, left_on=entity_id, right_on = f'gs-{entity_id}', how='outer')
+	else:
+		print('Something seems to be wrong here')
 
 	
+	
 
-	biosample_filtered_table.to_csv(f'{outdir}/biosample_table.csv', header = True, index = False, sep = ",")
-	sra_filtered_table.to_csv(f'{outdir}/sra_table.csv', header = True, index = False, sep = ",")
-	gisaid_filtered_table.to_csv(f'{outdir}/gisaid_table.csv', header = True, index = False, sep = ",")
-	shared_filtered_table.to_csv(f'{outdir}/shared_table.csv', header = True, index = False, sep = ",")
-	merged_metadata_tables3.to_csv(f'{outdir}/merged_metadata.csv', header = True, index = False, sep = ",")
+	#merged_metadata_tables1 = pd.merge(shared_filtered_table, biosample_filtered_table, left_on=entity_id, right_on = f'bs-{entity_id}', how='outer')
+	#merged_metadata_tables2 = pd.merge(merged_metadata_tables1, sra_filtered_table, left_on=entity_id, right_on = f'sra-{entity_id}', how='outer')
+	#merged_metadata_tables3 = pd.merge(merged_metadata_tables2, gisaid_filtered_table, left_on=entity_id, right_on = f'gs-{entity_id}', how='outer')
 
+	columns_to_remove = [f'gs-{entity_id}', f'bs-{entity_id}', entity_id, f'sra-{entity_id}']
+	columns_to_remove = [col for col in columns_to_remove if col in merged_metadata_tables.columns]
+	merged_metadata_tables.drop(columns=columns_to_remove, inplace=True)
+	print(merged_metadata_tables.columns)
+	merged_metadata_tables.to_csv(f'{outdir}/merged_metadata.csv', header = True, index = False, sep = ",")
 
-	print(f"Missing Biosample fields: {missing_biosample}")
-	print(f"Missing SRA fields: {missing_sra}")
-	print(f"Missing GISAID fields: {missing_gisaid}")
-	print(f"Missing Shared fields: {missing_shared}")
-
-	merged_columns = merged_metadata_tables3.columns
+	merged_columns = merged_metadata_tables.columns
 	orig_columns = "sequence_name,organism,authors,collection_date,bioproject,bs-sample_name,bs-collected_by,bs-geo_loc_name,bs-host,bs-host_disease,bs-isolate,bs-isolation_source,sra-sample_name,sra-file_location,sra-library_name,sra-file_1,sra-library_strategy,sra-library_source,sra-library_selection,sra-library_layout,sra-platform,sra-instrument_model,sra-design_description,gs-sample_name,gs-covv_type,gs-covv_passage,gs-covv_location,gs-covv_add_location,gs-covv_host,gs-covv_add_host_info,gs-covv_sampling_strategy,gs-covv_gender,gs-covv_patient_age,gs-covv_patient_status,gs-covv_specimen,gs-covv_outbreak,gs-covv_last_vaccinated,gs-covv_treatment,gs-covv_seq_technology,gs-covv_assembly_method,gs-covv_coverage,gs-covv_orig_lab,gs-covv_orig_lab_addr,gs-covv_provider_sample_id,gs-covv_subm_lab,gs-covv_subm_lab_addr,gs-covv_subm_sample_id,gs-covv_consortium,gs-covv_comment,gs-comment_type"
 
 	columns_merged = set(merged_columns)
@@ -247,6 +262,6 @@ if __name__ == '__main__':
 		repository_column_map_file='/home/ewolfsohn/git_repositories/public_health_bioinformatics/tasks/utilities/submission/repository_column_map.csv',
 		entity_id='entity:seqsender_test_id',
 		outdir = '/home/ewolfsohn/git_repositories/public_health_bioinformatics/tasks/utilities/submission',
-		db_selection = ['sra', 'bs', 'gs'],
+		db_selection = ['bs','sra'],
 		cloud_uri = 'gs://theiagen_sra_transfer/'
 	)
