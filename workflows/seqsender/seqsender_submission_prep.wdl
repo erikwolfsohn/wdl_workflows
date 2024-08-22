@@ -73,13 +73,12 @@ task prepare_seqsender_submission {
 	}
 
 	meta {
-		# added so that call caching is always turned off
 		volatile: true
 	}
 	command <<<
 
 		current_dir=$(pwd)
-		cp ~{input_table} ~{table_name}-data.tsv
+		python export_large_tsv.py --project "~{project_name}" --workspace "~{workspace_name}" --entity_type ~{table_name} --tsv_filename ~{table_name}-data.tsv
 		biosample_schema_file=$(find /seqsender/config/biosample/ -type f -name "~{biosample_schema_name}")
 
 		python3 <<CODE
@@ -89,7 +88,6 @@ task prepare_seqsender_submission {
 		import numpy as np
 		import pandas as pd
 		from datetime import datetime
-		#import argparse
 		import json
 
 
