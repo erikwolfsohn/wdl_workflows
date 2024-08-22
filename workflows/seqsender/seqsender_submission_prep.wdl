@@ -1,6 +1,4 @@
 version 1.0
-# submission workflow for the seqsender pipeline
-# thanks to dakota howard & team at cdc for their amazing work on seqsender & theiagen genomics for their awesome terra submission workflows
 workflow seqsender_submission_prep {
 	input {
 		String project_name
@@ -11,7 +9,6 @@ workflow seqsender_submission_prep {
 		String biosample_schema_name
 		String? sra_transfer_gcp_bucket
 		String? fasta_column
-		#String? submission_column
 		File repository_column_map_csv
 		File static_metadata_csv
 		File? input_table
@@ -80,20 +77,12 @@ task prepare_seqsender_submission {
 		volatile: true
 	}
 	command <<<
-		#python3 /scripts/export_large_tsv/export_large_tsv.py --project "~{project_name}" --workspace "~{workspace_name}" --entity_type ~{table_name} --tsv_filename ~{table_name}-data.tsv
 
 		current_dir=$(pwd)
 		cp ~{input_table} ~{table_name}-data.tsv
 		biosample_schema_file=$(find /seqsender/config/biosample/ -type f -name "~{biosample_schema_name}")
-		#cp "${biosample_schema_file}" .
-		#biosample_schema_file="./$(basename "${biosample_schema_file}")"
-
-		# when running locally, use the input_table in place of downloading from Terra
-		#cp ~{input_table} ~{table_name}-data.tsv
 
 		python3 <<CODE
-			# script to process terra table for seqsender submission
-			# huge thanks to dakota howard et al. @ cdc for developing seqsender & theiagen genomics for their various terra submission workflows which I frankensteined into here
 
 		import xml.etree.ElementTree as ET
 		from typing import Optional, Tuple
@@ -105,12 +94,12 @@ task prepare_seqsender_submission {
 
 
 		def remove_nas(entity_id, table, required_metadata):
-			table.replace(r'^\s+$', np.nan, regex=True) # replace blank cells with NaNs 
-			excluded_samples = table[table[required_metadata].isna().any(axis=1)] # write out all rows that are required with NaNs to a new table
-			excluded_samples.set_index(entity_id.lower(), inplace=True) # convert the sample names to the index so we can determine what samples are missing what
-			excluded_samples = excluded_samples[excluded_samples.columns.intersection(required_metadata)] # remove all optional columns so only required columns are shown
-			excluded_samples = excluded_samples.loc[:, excluded_samples.isna().any()] # remove all NON-NA columns so only columns with NAs remain; Shelly is a wizard and I love her 
-			table.dropna(subset=required_metadata, axis=0, how='any', inplace=True) # remove all rows that are required with NaNs from table
+			table.replace(r'^\s+$', np.nan, regex=True) 
+			excluded_samples = table[table[required_metadata].isna().any(axis=1)] 
+			excluded_samples.set_index(entity_id.lower(), inplace=True) 
+			excluded_samples = excluded_samples[excluded_samples.columns.intersection(required_metadata)] 
+			excluded_samples = excluded_samples.loc[:, excluded_samples.isna().any()] 
+			table.dropna(subset=required_metadata, axis=0, how='any', inplace=True) 
 
 			return table, excluded_samples
 
@@ -156,7 +145,7 @@ task prepare_seqsender_submission {
 				elif use == 'optional': 
 					optional_list.append(name)
 			
-			##update Terra variable here
+
 			mandatory_list.append(entity_id)
 			mandatory_list.append('sample_name')
 
@@ -180,7 +169,7 @@ task prepare_seqsender_submission {
 
 			missing_mandatory = list(set(mandatory_list) - set(table.columns))
 
-			# set Terra variables here
+
 			filtered_table_df = table[[col for col in table.columns if col in all_attributes]]
 
 			if missing_mandatory:
@@ -192,7 +181,7 @@ task prepare_seqsender_submission {
 
 		def filter_table_by_sra(table, static_metadata, repository_column_map, entity_id, outdir, cloud_uri = None) -> Tuple [pd.DataFrame, list, list]:
 			table = table.copy()
-			# set Terra variables here
+
 			mandatory_list = [entity_id, "sample_name", "library_name", "library_strategy", "library_source", "library_selection", "library_layout", "platform", "instrument_model", "design_description", "file_1", "platform","file_location"]
 			optional_list = ["file_2","file_3","file_4","assembly","fasta_file", "biosample_accession"]
 			
@@ -214,8 +203,8 @@ task prepare_seqsender_submission {
 
 			filtered_table_df.columns = ['sra-' + col for col in filtered_table_df.columns]
 
-			# prettify the filenames and rename them to be sra compatible
-			filtered_table_df["sra-file_1"].to_csv(f'{outdir}/filepaths.csv', index=False, header=False) # make a file that contains the names of all the reads so we can use gsutil -m cp
+	
+			filtered_table_df["sra-file_1"].to_csv(f'{outdir}/filepaths.csv', index=False, header=False) 
 			if cloud_uri:
 				filtered_table_df["sra-file_1"] = filtered_table_df["sra-file_1"].map(lambda filename: filename.split('/').pop())
 				filtered_table_df["sra-file_1"] = filtered_table_df["sra-file_1"].map(lambda filename: cloud_uri + filename if pd.notna(filename) else filename)
@@ -310,7 +299,7 @@ task prepare_seqsender_submission {
 			print(f"Missing Shared fields: {missing_shared}")
 			shared_filtered_table.to_csv(f'{outdir}/shared_table.csv', header = True, index = False, sep = ",")
 
-			# figure out a better way to do this
+	
 			if 'gs' in db_selection and 'bs' not in db_selection and 'sra' not in db_selection:
 				merged_metadata_tables = pd.merge(shared_filtered_table, gisaid_filtered_table, left_on=entity_id, right_on = f'gs-{entity_id}', how='outer')
 			elif 'bs' in db_selection and 'gs' not in db_selection and 'sra' not in db_selection:
@@ -331,14 +320,14 @@ task prepare_seqsender_submission {
 			columns_to_remove = [f'gs-{entity_id}', f'bs-{entity_id}', entity_id, f'sra-{entity_id}', 'gs-fasta_column', 'gs-submission_id']
 			columns_to_remove = [col for col in columns_to_remove if col in merged_metadata_tables.columns]
 			merged_metadata_tables.drop(columns=columns_to_remove, inplace=True)
-			#print(merged_metadata_tables.columns)
+
 			merged_metadata_tables.to_csv(f'{outdir}/merged_metadata.csv', header = True, index = False, sep = ",")
 
 
 				
 		if __name__ == '__main__':
 			main(
-				#tablename='/home/ewolfsohn/git_repositories/public_health_bioinformatics/tasks/utilities/submission/seqsender_test.tsv',
+
 				tablename="~{table_name}-data.tsv",
 				biosample_schema="${biosample_schema_file}",
 				static_metadata_file="~{static_metadata_csv}",
@@ -347,8 +336,8 @@ task prepare_seqsender_submission {
 				outdir = "${current_dir}",
 				db_selection ="~{repository_selection}",
 				cloud_uri =" ~{sra_transfer_gcp_bucket}"
-			)		
-			#python /seqsender/process_terra_table.py ~{table_name}-data.tsv "$biosample_schema_file" ~{static_metadata_csv} ~{repository_column_map_csv}  "entity:~{table_name}_id" "$current_dir" --db_selection bs sra gs --cloud_uri gs://theiagen_sra_transfer/
+			)
+
 		CODE
 
 	>>>
