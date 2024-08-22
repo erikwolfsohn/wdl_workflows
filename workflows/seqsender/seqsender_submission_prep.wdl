@@ -78,7 +78,7 @@ task prepare_seqsender_submission {
 	command <<<
 
 		current_dir=$(pwd)
-		python export_large_tsv.py --project "~{project_name}" --workspace "~{workspace_name}" --entity_type ~{table_name} --tsv_filename ~{table_name}-data.tsv
+		python /seqsender/export_large_tsv.py --project "~{project_name}" --workspace "~{workspace_name}" --entity_type ~{table_name} --tsv_filename ~{table_name}-data.tsv
 		biosample_schema_file=$(find /seqsender/config/biosample/ -type f -name "~{biosample_schema_name}")
 
 		python3 <<CODE
