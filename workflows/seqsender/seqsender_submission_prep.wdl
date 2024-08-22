@@ -19,7 +19,7 @@ workflow seqsender_submission_prep {
 	}
 
 	call prepare_seqsender_submission {
-		input:
+		input
 		project_name = project_name,
 		workspace_name = workspace_name,
 		table_name = table_name,
@@ -35,7 +35,7 @@ workflow seqsender_submission_prep {
 
 	if (defined(sra_transfer_gcp_bucket)) {
 		call upload_sra {
-			input:
+			input
 			sra_filepaths = prepare_seqsender_submission.sra_filepaths,
 			sra_transfer_gcp_bucket = sra_transfer_gcp_bucket
 		}
@@ -43,7 +43,7 @@ workflow seqsender_submission_prep {
 
 	if (defined(fasta_column)) {
 		call merge_fasta {
-			input:
+			input
 			fasta_filepaths = prepare_seqsender_submission.fasta_filepaths
 		}
 	}
