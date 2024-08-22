@@ -19,32 +19,32 @@ workflow seqsender_submission_prep {
 	}
 
 	call prepare_seqsender_submission {
-		input
-		project_name = project_name,
-		workspace_name = workspace_name,
-		table_name = table_name,
-		sample_names = sample_names,
-		repository_selection = repository_selection,
-		biosample_schema_name = biosample_schema_name,
-		sra_transfer_gcp_bucket = sra_transfer_gcp_bucket,
-		repository_column_map_csv = repository_column_map_csv,
-		static_metadata_csv = static_metadata_csv,
-		input_table = input_table,
-		disk_size = disk_size
+		input:
+			project_name = project_name,
+			workspace_name = workspace_name,
+			table_name = table_name,
+			sample_names = sample_names,
+			repository_selection = repository_selection,
+			biosample_schema_name = biosample_schema_name,
+			sra_transfer_gcp_bucket = sra_transfer_gcp_bucket,
+			repository_column_map_csv = repository_column_map_csv,
+			static_metadata_csv = static_metadata_csv,
+			input_table = input_table,
+			disk_size = disk_size
 	}
 
 	if (defined(sra_transfer_gcp_bucket)) {
 		call upload_sra {
-			input
-			sra_filepaths = prepare_seqsender_submission.sra_filepaths,
-			sra_transfer_gcp_bucket = sra_transfer_gcp_bucket
+			input:
+				sra_filepaths = prepare_seqsender_submission.sra_filepaths,
+				sra_transfer_gcp_bucket = sra_transfer_gcp_bucket
 		}
 	}
 
 	if (defined(fasta_column)) {
 		call merge_fasta {
-			input
-			fasta_filepaths = prepare_seqsender_submission.fasta_filepaths
+			input:
+				fasta_filepaths = prepare_seqsender_submission.fasta_filepaths
 		}
 	}
 
