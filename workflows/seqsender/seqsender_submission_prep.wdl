@@ -361,7 +361,7 @@ task prepare_seqsender_submission {
 
 task upload_sra {
 	input {
-		File sra_filepaths
+		File? sra_filepaths
 		String? sra_transfer_gcp_bucket
 		Int memory = 8
 		Int cpu = 4
@@ -392,7 +392,7 @@ task upload_sra {
 
 task merge_fasta {
 	input {
-		File fasta_filepaths
+		File? fasta_filepaths
 		Int memory = 8
 		Int cpu = 4
 		String docker = "ewolfsohn/seqsender:v1.2.0_terratools"
