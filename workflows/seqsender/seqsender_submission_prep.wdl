@@ -385,7 +385,7 @@ task upload_sra {
 			gsutil -m cp -n "${line}" "${local_file}"
 			echo "running gsutil to transfer sra files to ~{sra_transfer_gcp_bucket}"
 			gsutil -m cp -n "${local_file}" "~{sra_transfer_gcp_bucket}"
-			echo "Removing local file: $local_file"
+			echo "Removing local file: ${local_file}"
 			rm "${local_file}"
 		done < ~{sra_filepaths}
 
