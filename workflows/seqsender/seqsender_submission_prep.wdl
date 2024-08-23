@@ -380,7 +380,7 @@ task upload_sra {
 	command <<<
 
 		while IFS= read -r line; do
-			echo "running \`gsutil -m cp ${line} ~{gcp_bucket_uri}\`"
+			echo "running \`gsutil -m cp ${line} ~{sra_transfer_gcp_bucket}\`"
 			gsutil -m cp -n "${line}" "~{sra_transfer_gcp_bucket}"
 		done < ~{sra_filepaths}
 
