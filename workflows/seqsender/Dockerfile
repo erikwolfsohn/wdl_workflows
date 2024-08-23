@@ -1,34 +1,84 @@
-FROM mambaorg/micromamba:1.5.5-jammy as app
+# Create an argument to pull a particular version of micromamba image
+ARG micromamba_version
+ARG micromamba_version=${micromamba_version:-1.5.3}
 
-LABEL base.image="mambaorg/micromamba:1.5.5"
+############# base image ##################
+ARG gcloud_sdk_version
+ARG gcloud_sdk_version=${489.0.0-stable}
+FROM --platform=$BUILDPLATFORM google/cloud-sdk:${gcloud_sdk_version} as base
+
+# local apt mirror support
+# start every stage with updated apt sources
+ARG APT_MIRROR_NAME=
+RUN if [ -n "$APT_MIRROR_NAME" ]; then sed -i.bak -E '/security/! s^https?://.+?/(debian|ubuntu)^http://'"$APT_MIRROR_NAME"'/\1^' /etc/apt/sources.list && grep '^deb' /etc/apt/sources.list; fi
+RUN apt-get update --allow-releaseinfo-change --fix-missing
+
+############# micromamba image ##################
+
+FROM --platform=$BUILDPLATFORM mambaorg/micromamba:${micromamba_version} as micromamba
+RUN echo "Getting micromamba image"
+
+############# Build Stage: Final ##################
+
+# Build the final image 
+FROM base as final
+
+LABEL micromamba.image="mambaorg/micromamba:${micromamba_version}"
+LABEL base.image="google/cloud-sdk:${gcloud_sdk_version}"
 LABEL dockerfile.version="1"
 LABEL software="seqsender"
-LABEL software.version="master"
+LABEL software.version="v1.2.0_terratools"
 LABEL description="Automated Pipeline to Generate FTP Files and Manage Submission of Sequence Data to Public Repositories"
 LABEL website="https://github.com/CDCgov/seqsender"
 LABEL license="https://github.com/CDCgov/seqsender/blob/master/LICENSE"
 LABEL maintainer="Erik Wolfsohn"
 LABEL maintainer.email="erik.wolfsohn@cchealth.org"
 
-ARG SEQSENDER_SOFTWARE_VERSION="master"
+# if image defaults to a non-root user, then we may want to make the
+# next 3 ARG commands match the values in our image. 
+ENV MAMBA_USER=$MAMBA_USER
+ENV MAMBA_USER_ID=$MAMBA_USER_ID
+ENV MAMBA_USER_GID=$MAMBA_USER_GID
+ENV MAMBA_ROOT_PREFIX="/opt/conda"
+ENV MAMBA_EXE="/bin/micromamba"
 
-USER root
+COPY --from=micromamba "$MAMBA_EXE" "$MAMBA_EXE"
+COPY --from=micromamba /usr/local/bin/_activate_current_env.sh /usr/local/bin/_activate_current_env.sh
+COPY --from=micromamba /usr/local/bin/_dockerfile_shell.sh /usr/local/bin/_dockerfile_shell.sh
+COPY --from=micromamba /usr/local/bin/_entrypoint.sh /usr/local/bin/_entrypoint.sh
+COPY --from=micromamba /usr/local/bin/_dockerfile_initialize_user_accounts.sh /usr/local/bin/_dockerfile_initialize_user_accounts.sh
+COPY --from=micromamba /usr/local/bin/_dockerfile_setup_root_prefix.sh /usr/local/bin/_dockerfile_setup_root_prefix.sh
 
-RUN micromamba install -y -n base -c conda-forge python=3.6.15 requests unzip &&\
-    micromamba clean --all --yes
+# Install system dependencies
+ARG DEBIAN_FRONTEND=noninteractive
 
-ENV PATH="/opt/conda/bin:/opt/conda/envs/base/bin:${PATH}" \
-    LC_ALL=C.UTF-8
+# Install system libraries of general use
+RUN apt-get update --allow-releaseinfo-change --fix-missing \
+  && apt-get install --no-install-recommends -y \
+  dos2unix \
+  ca-certificates \
+  git \
+  && apt clean autoclean \
+  && apt autoremove --yes \
+  && rm -rf /var/lib/{apt,dpkg,cache,log}/
 
-RUN python -c "import requests; r = requests.get('https://codeload.github.com/erikwolfsohn/seqsender/zip/refs/heads/${SEQSENDER_SOFTWARE_VERSION}') ; open('seqsender-master.zip' , 'wb').write(r.content)" &&\
-    unzip seqsender-master.zip
-    
-RUN sed -i 's/^name: seqsender$/name: base/' seqsender-master/env.yaml &&\  
-    micromamba update -y --file seqsender-master/env.yaml &&\
-    pip install --no-input nameparser==1.1.3
+ARG REPO_URL="https://github.com/erikwolfsohn/seqsender.git"
+ARG REPO_BRANCH="seqsender-terra-submission"
 
-RUN mv seqsender-master /data
+RUN git clone --branch ${REPO_BRANCH} ${REPO_URL} /seqsender \
+	&& chmod a+x /seqsender/*.py
+
+RUN micromamba install --yes --name base -f "/seqsender/env.yaml" \
+    && micromamba clean --all --yes \
+	&& mkdir /data
+
+RUN micromamba install --yes --name base --channel conda-forge --channel bioconda tqdm=4.66.5=pyhd8ed1ab_0 firecloud=0.16.37=pyhdfd78af_0
+
+ENV PATH=${PATH}:/seqsender \
+	LC_ALL=C
+
+ENV PATH="$PATH:${MAMBA_ROOT_PREFIX}/bin"
 
 WORKDIR /data
 
-CMD cd /data && python seqsender.py --help
+CMD cd /data && python /seqsender/seqsender.py --help

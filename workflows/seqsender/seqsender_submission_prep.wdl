@@ -95,7 +95,7 @@ task prepare_seqsender_submission {
 		import json
 
 
-		def remove_nas(entity_id, table, required_metadata):
+		def remove_nas(entity_id: str, table: pd.DataFrame, required_metadata: list[str]) -> Tuple[pd.DataFrame, pd.DataFrame]:
 			table.replace(r'^\s+$', np.nan, regex=True) 
 			excluded_samples = table[table[required_metadata].isna().any(axis=1)] 
 			excluded_samples.set_index(entity_id.lower(), inplace=True) 
@@ -106,10 +106,10 @@ task prepare_seqsender_submission {
 			return table, excluded_samples
 
 
-		def format_location(row):
+		def format_location(row: str) -> str:
 			return f"{row['continent']}/{row['country']}/{row['state']}/{row['county']}"
 
-		def format_gisaid_virus_name(row):
+		def format_gisaid_virus_name(row: str) -> str:
 			try:
 				year = datetime.strptime(row['collection_date'], '%Y-%m-%d').year
 			except ValueError:
@@ -118,7 +118,7 @@ task prepare_seqsender_submission {
 			return f"{row['virus_prefix']}/{row['country']}/{row['submission_id']}/{year}"
 
 
-		def format_biosample_isolate_name(row):
+		def format_biosample_isolate_name(row: str) -> str:
 			try:
 				year = datetime.strptime(row['collection_date'], '%Y-%m-%d').year
 			except ValueError:
@@ -127,7 +127,7 @@ task prepare_seqsender_submission {
 			return f"{row['isolate_prefix']}/{row['country']}/{row['sample_name']}/{year}"
 
 
-		def filter_table_by_biosample(table, biosample_schema, static_metadata, repository_column_map, entity_id) -> Tuple [pd.DataFrame, list, list]:
+		def filter_table_by_biosample(table: pd.DataFrame, biosample_schema: str, static_metadata: pd.DataFrame, repository_column_map: pd.DataFrame, entity_id: str) -> Tuple [pd.DataFrame, list, list]:
 			
 			table = table.copy()
 			
@@ -182,7 +182,7 @@ task prepare_seqsender_submission {
 			filtered_table_df.columns = ['bs-' + col for col in filtered_table_df.columns]
 			return filtered_table_df, missing_mandatory, mandatory_list
 
-		def filter_table_by_sra(table, static_metadata, repository_column_map, entity_id, outdir, cloud_uri = None) -> Tuple [pd.DataFrame, list, list]:
+		def filter_table_by_sra(table: pd.DataFrame, static_metadata: pd.DataFrame, repository_column_map: pd.DataFrame, entity_id: str, outdir: str, cloud_uri: Optional[str] = None) -> Tuple [pd.DataFrame, list, list]:
 			table = table.copy()
 
 			mandatory_list = [entity_id, "sample_name", "library_name", "library_strategy", "library_source", "library_selection", "library_layout", "platform", "instrument_model", "design_description", "file_1", "platform","file_location"]
@@ -219,7 +219,7 @@ task prepare_seqsender_submission {
 
 			return filtered_table_df, missing_mandatory, mandatory_list
 
-		def filter_table_by_gisaid_cov(table, static_metadata, repository_column_map, entity_id, outdir) -> Tuple [pd.DataFrame, list, list]:
+		def filter_table_by_gisaid_cov(table: pd.DataFrame, static_metadata: pd.DataFrame, repository_column_map: pd.DataFrame, entity_id: str, outdir: str) -> Tuple [pd.DataFrame, list, list]:
 			table = table.copy()
 			
 			mandatory_list = [entity_id, 'fasta_column', 'submission_id', 'sample_name', 'covv_type', 'covv_passage', 'covv_location', 'covv_host', 'covv_sampling_strategy', 'covv_gender', 'covv_patient_age', 'covv_seq_technology', 'covv_assembly_method', 'covv_coverage', 'covv_orig_lab', 'covv_orig_lab_addr', 'covv_subm_lab', 'covv_subm_lab_addr']
@@ -257,7 +257,7 @@ task prepare_seqsender_submission {
 
 			return filtered_table_df, missing_mandatory, mandatory_list
 
-		def filter_table_by_shared(table, static_metadata, repository_column_map, entity_id) -> Tuple [pd.DataFrame, list, list]:
+		def filter_table_by_shared(table: pd.DataFrame, static_metadata: pd.DataFrame, repository_column_map: pd.DataFrame, entity_id: str) -> Tuple [pd.DataFrame, list, list]:
 			table = table.copy()
 
 			mandatory_list = [entity_id,'sequence_name','authors','collection_date']
@@ -279,7 +279,7 @@ task prepare_seqsender_submission {
 			remove_nas(entity_id, filtered_table_df, mandatory_list)
 			return filtered_table_df, missing_mandatory, mandatory_list
 
-		def main(tablename, biosample_schema, static_metadata_file, repository_column_map_file, entity_id, db_selection, outdir, cloud_uri = None):
+		def main(tablename: str, biosample_schema: str, static_metadata_file: str, repository_column_map_file: str, entity_id: str, db_selection: str, outdir: str, cloud_uri: Optional[str] = None) -> None:
 			db_selection = db_selection.split(',')
 			table = pd.read_csv(tablename, delimiter='\t', header=0, dtype=str)
 			# table = pd.read_csv(tablename, delimiter='\t', header=0, dtype={entity_id: 'str'})
@@ -296,6 +296,7 @@ task prepare_seqsender_submission {
 				print(f"Missing Biosample fields: {missing_biosample}")
 				biosample_filtered_table.to_csv(f'{outdir}/biosample_table.csv', header = True, index = False, sep = ",")
 			if 'sra' in db_selection:
+				# maybe check for cloud uri here
 				sra_filtered_table, missing_sra, mandatory_sra_list = filter_table_by_sra(table, static_metadata, repository_column_map, entity_id, outdir, cloud_uri)
 				print(f"Missing SRA fields: {missing_sra}")
 				sra_filtered_table.to_csv(f'{outdir}/sra_table.csv', header = True, index = False, sep = ",")
