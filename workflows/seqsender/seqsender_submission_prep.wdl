@@ -165,6 +165,7 @@ task prepare_seqsender_submission {
 			rename_dict = repository_column_map.set_index('terra')['biosample'].dropna().to_dict()
 			table.rename(columns=rename_dict,inplace = True)
 
+			# handle errors here
 			columns_needed = ['isolate_prefix','sample_name', 'collection_date']
 			if all(column in table.columns for column in columns_needed):
 				table['isolate'] = table.apply(format_biosample_isolate_name, axis = 1)
