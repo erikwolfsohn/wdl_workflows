@@ -1,4 +1,6 @@
 version 1.0
+# workflow to process terra table for seqsender submission
+# huge thanks to dakota howard et al. @ cdc for developing seqsender & theiagen genomics for their various terra submission workflows which I frankensteined into here
 workflow seqsender_submission_prep {
 	input {
 		String project_name
@@ -78,7 +80,9 @@ task prepare_seqsender_submission {
 	command <<<
 
 		current_dir=$(pwd)
+		# change this back when using in terra
 		python /seqsender/export_large_tsv.py --project "~{project_name}" --workspace "~{workspace_name}" --entity_type ~{table_name} --tsv_filename ~{table_name}-data.tsv
+		# cp ~{input_table} ~{table_name}-data.tsv
 		biosample_schema_file=$(find /seqsender/config/biosample/ -type f -name "~{biosample_schema_name}")
 
 		python3 <<CODE
@@ -276,7 +280,12 @@ task prepare_seqsender_submission {
 
 		def main(tablename, biosample_schema, static_metadata_file, repository_column_map_file, entity_id, db_selection, outdir, cloud_uri = None):
 			db_selection = db_selection.split(',')
-			table = pd.read_csv(tablename, delimiter='\t', header=0, dtype={entity_id: 'str'})
+			table = pd.read_csv(tablename, delimiter='\t', header=0, dtype=str)
+			# table = pd.read_csv(tablename, delimiter='\t', header=0, dtype={entity_id: 'str'})
+			# change the split back here when using in terra
+			# table = table[table[entity_id].isin("~{sep=',' sample_names}".split(","))]
+			table = table[table[entity_id].isin("~{sep='*' sample_names}".split("*"))]
+			print(table)
 			static_metadata = pd.read_csv(static_metadata_file, delimiter=',', header=0)
 			repository_column_map = pd.read_csv(repository_column_map_file, delimiter=',', header=0)
 
@@ -330,7 +339,7 @@ task prepare_seqsender_submission {
 				biosample_schema="${biosample_schema_file}",
 				static_metadata_file="~{static_metadata_csv}",
 				repository_column_map_file="~{repository_column_map_csv}",
-				entity_id="entity:~{table_name}_id",
+				entity_id="~{table_name}_id",
 				outdir = "${current_dir}",
 				db_selection ="~{repository_selection}",
 				cloud_uri =" ~{sra_transfer_gcp_bucket}"
@@ -399,25 +408,45 @@ task merge_fasta {
 
 	command <<<
 
-	python <<CODE
-	
-	import pandas as pd
-	from Bio import SeqIO
-	table = pd.read_csv("~{fasta_filepaths}", delimiter=',', header=None, names=['filepaths', 'fasta_header_names'])
-	
+		python <<CODE
 
-	all_records = []
-	for index, row in table.iterrows():
-		file_path = row['filepaths']
-		new_header = row['fasta_header_names']
-		records = list(SeqIO.parse(file_path, 'fasta'))
-		records[0].id = new_header
-		records[0].description = ''
-		all_records.extend(records)
-	merged_fasta_path = 'concatenated_fastas.fasta'
-	SeqIO.write(all_records, merged_fasta_path, 'fasta')
+		import pandas as pd
+		from Bio import SeqIO
+		import os
+		import subprocess
+		import sys
+		
+		table = pd.read_csv("~{fasta_filepaths}", header=None, names=['fasta_path', 'fasta_header_names'])
 
-	CODE
+		for index, row in table.iterrows():
+			fasta_path = row['fasta_path']
+			new_header = row['fasta_header_names']
+
+			command = ['gsutil', '-m', 'cp', '-n', fasta_path, '.']
+			result = subprocess.run(command, text=True, capture_output=True)
+			if result.returncode != 0:
+				print("Command failed with return code:", result.returncode)
+				print("Error output:", result.stderr)
+				sys.exit(result.returncode)
+			else:
+				print("Command executed successfully:", result.stdout)
+
+			table.at[index, 'basenames'] = os.path.basename(fasta_path)
+			print(table)
+
+		all_records = []
+		for index, row in table.iterrows():
+			fasta_file = row['basenames']
+			new_header = row['fasta_header_names']
+			records = list(SeqIO.parse(fasta_file, 'fasta'))
+			records[0].id = new_header
+			records[0].description = ''
+			all_records.extend(records)
+		merged_fasta_path = 'concatenated_fastas.fasta'
+		SeqIO.write(all_records, merged_fasta_path, 'fasta')
+
+		CODE
+
 	>>>
 
 	output {
