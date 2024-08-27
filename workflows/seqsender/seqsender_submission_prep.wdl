@@ -48,7 +48,7 @@ workflow seqsender_submission_prep {
 	}
 
 	output {
-		File seqsender_seqsender_metadata = prepare_seqsender_submission.seqsender_metadata
+		File seqsender_metadata = prepare_seqsender_submission.seqsender_metadata
 		File? seqsender_sra_filepaths = prepare_seqsender_submission.seqsender_sra_filepaths
 		File? seqsender_fasta_filepaths = prepare_seqsender_submission.seqsender_fasta_filepaths
 		File? seqsender_concatenated_fasta = merge_fasta.seqsender_concatenated_fasta
