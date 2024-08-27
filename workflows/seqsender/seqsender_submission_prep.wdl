@@ -35,7 +35,7 @@ workflow seqsender_submission_prep {
 	if (defined(sra_transfer_gcp_bucket)) {
 		call upload_sra {
 			input:
-				sra_filepaths = prepare_seqsender_submission.sra_filepaths,
+				seqsender_sra_filepaths = prepare_seqsender_submission.seqsender_sra_filepaths,
 				sra_transfer_gcp_bucket = sra_transfer_gcp_bucket
 		}
 	}
@@ -43,15 +43,15 @@ workflow seqsender_submission_prep {
 	if (defined(fasta_column)) {
 		call merge_fasta {
 			input:
-				fasta_filepaths = prepare_seqsender_submission.fasta_filepaths
+				seqsender_fasta_filepaths = prepare_seqsender_submission.seqsender_fasta_filepaths
 		}
 	}
 
 	output {
-		File seqsender_metadata = prepare_seqsender_submission.seqsender_metadata
-		File? sra_filepaths = prepare_seqsender_submission.sra_filepaths
-		File? fasta_filepaths = prepare_seqsender_submission.fasta_filepaths
-		File? concatenated_fastas = merge_fasta.concatenated_fastas
+		File seqsender_seqsender_metadata = prepare_seqsender_submission.seqsender_metadata
+		File? seqsender_sra_filepaths = prepare_seqsender_submission.seqsender_sra_filepaths
+		File? seqsender_fasta_filepaths = prepare_seqsender_submission.seqsender_fasta_filepaths
+		File? seqsender_concatenated_fasta = merge_fasta.seqsender_concatenated_fasta
 	}
 
 }
@@ -352,8 +352,8 @@ task prepare_seqsender_submission {
 
 	output {
 		File seqsender_metadata = "merged_metadata.csv"
-		File? sra_filepaths = "filepaths.csv"
-		File? fasta_filepaths = "fasta_filepaths.csv"
+		File? seqsender_sra_filepaths = "filepaths.csv"
+		File? seqsender_fasta_filepaths = "fasta_filepaths.csv"
 	}
 
 	runtime {
@@ -369,7 +369,7 @@ task prepare_seqsender_submission {
 
 task upload_sra {
 	input {
-		File? sra_filepaths
+		File? seqsender_sra_filepaths
 		String? sra_transfer_gcp_bucket
 		Int memory = 8
 		Int cpu = 4
@@ -382,7 +382,7 @@ task upload_sra {
 		while IFS= read -r line; do
 			echo "running \`gsutil -m cp ${line} ~{sra_transfer_gcp_bucket}\`"
 			gsutil -m cp -n "${line}" "~{sra_transfer_gcp_bucket}"
-		done < ~{sra_filepaths}
+		done < ~{seqsender_sra_filepaths}
 
 	>>>
 
@@ -399,7 +399,7 @@ task upload_sra {
 
 task merge_fasta {
 	input {
-		File? fasta_filepaths
+		File? seqsender_fasta_filepaths
 		Int memory = 8
 		Int cpu = 4
 		String docker = "ewolfsohn/seqsender:v1.2.0_terratools"
@@ -416,7 +416,7 @@ task merge_fasta {
 		import subprocess
 		import sys
 		
-		table = pd.read_csv("~{fasta_filepaths}", header=None, names=['fasta_path', 'fasta_header_names'])
+		table = pd.read_csv("~{seqsender_fasta_filepaths}", header=None, names=['fasta_path', 'fasta_header_names'])
 
 		for index, row in table.iterrows():
 			fasta_path = row['fasta_path']
@@ -442,7 +442,7 @@ task merge_fasta {
 			records[0].id = new_header
 			records[0].description = ''
 			all_records.extend(records)
-		merged_fasta_path = 'concatenated_fastas.fasta'
+		merged_fasta_path = 'seqsender_concatenated_fasta.fasta'
 		SeqIO.write(all_records, merged_fasta_path, 'fasta')
 
 		CODE
@@ -450,7 +450,7 @@ task merge_fasta {
 	>>>
 
 	output {
-		File concatenated_fastas = 'concatenated_fastas.fasta'
+		File seqsender_concatenated_fasta = 'seqsender_concatenated_fasta.fasta'
 	}
 
 	runtime {
