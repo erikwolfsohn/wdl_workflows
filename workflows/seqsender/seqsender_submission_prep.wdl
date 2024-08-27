@@ -14,7 +14,15 @@ workflow seqsender_submission_prep {
 		File repository_column_map_csv
 		File static_metadata_csv
 		File? input_table
-		Int disk_size = 100
+		Boolean check_coverage = false
+		Boolean check_contigs = false
+		Boolean check_seq_length = false
+		String coverage_column = 'placeholder'
+		String contigs_column = 'placeholder'
+		String seq_length_column = 'placeholder'
+		Int threshold_min_coverage = 85
+		Int threshold_max_seq_length = 1000000
+		Int threshold_max_contigs = 200
 	}
 
 	call prepare_seqsender_submission {
@@ -29,7 +37,15 @@ workflow seqsender_submission_prep {
 			repository_column_map_csv = repository_column_map_csv,
 			static_metadata_csv = static_metadata_csv,
 			input_table = input_table,
-			disk_size = disk_size
+			threshold_min_coverage = threshold_min_coverage,
+			threshold_max_seq_length = threshold_max_seq_length,
+			threshold_max_contigs = threshold_max_contigs,
+			coverage_column = coverage_column,
+			contigs_column = contigs_column,
+			seq_length_column = seq_length_column,
+			check_coverage = check_coverage,
+			check_contigs = check_contigs,
+			check_seq_length = check_seq_length
 	}
 
 	if (defined(sra_transfer_gcp_bucket)) {
@@ -71,7 +87,16 @@ task prepare_seqsender_submission {
 		Int memory = 8
 		Int cpu = 4
 		String docker = "ewolfsohn/seqsender:v1.2.0_terratools"
-		Int disk_size = 100		
+		Int disk_size = 100
+		Boolean check_coverage
+		Boolean check_contigs
+		Boolean check_seq_length
+		String? coverage_column
+		String? contigs_column
+		String? seq_length_column
+		Int? threshold_min_coverage
+		Int? threshold_max_seq_length
+		Int? threshold_max_contigs		
 	}
 
 	meta {
@@ -279,6 +304,46 @@ task prepare_seqsender_submission {
 			filtered_table_df = table[[col for col in table.columns if col in all_attributes]]
 			remove_nas(entity_id, filtered_table_df, mandatory_list)
 			return filtered_table_df, missing_mandatory, mandatory_list
+		
+		
+		def check_coverage(table) -> pd.DataFrame:
+			table['~{coverage_column}'] = pd.to_numeric(table['~{coverage_column}'], errors='coerce')
+			table['~{coverage_column}'] = table['~{coverage_column}'].round().astype(int)
+			if table['~{coverage_column}'].isnull().any():
+				print("Some rows were removed due to non-numeric values.")
+			
+			table = table[table['~{coverage_column}'] >= ~{threshold_min_coverage}]
+
+			table['~{coverage_column}'] = table['~{coverage_column}'].astype(str)
+
+			return table
+
+
+
+		def check_contigs(table) -> pd.DataFrame:
+			table['~{contigs_column}'] = pd.to_numeric(table['~{contigs_column}'], errors='coerce')
+			table['~{contigs_column}'] = table['~{contigs_column}'].round().astype(int)
+			if table['~{contigs_column}'].isnull().any():
+				print("Some rows were removed due to non-numeric values.")
+			
+			table = table[table['~{contigs_column}'] >= ~{threshold_max_contigs}]
+
+			table['~{contigs_column}'] = table['~{contigs_column}'].astype(str)
+
+			return table
+
+		def check_seq_length(table) -> pd.DataFrame:
+			table['~{seq_length_column}'] = pd.to_numeric(table['~{seq_length_column}'], errors='coerce')
+			table['~{seq_length_column}'] = table['~{seq_length_column}'].round().astype(int)
+			if table['~{seq_length_column}'].isnull().any():
+				print("Some rows were removed due to non-numeric values.")
+			
+			table = table[table['~{seq_length_column}'] >= ~{threshold_max_seq_length}]
+
+			table['~{seq_length_column}'] = table['~{seq_length_column}'].astype(str)
+
+			return table
+
 
 		def main(tablename, biosample_schema, static_metadata_file, repository_column_map_file, entity_id, db_selection, outdir, cloud_uri = None):
 			db_selection = db_selection.split(',')
@@ -287,6 +352,9 @@ task prepare_seqsender_submission {
 			# change the split back here when using in terra
 			# table = table[table[entity_id].isin("~{sep=',' sample_names}".split(","))]
 			table = table[table[entity_id].isin("~{sep='*' sample_names}".split("*"))]
+			~{true='table = check_coverage(table)' false='' check_coverage}
+			~{true='table = check_contigs(table)' false='' check_contigs}
+			~{true='table = check_seq_length(table)' false='' check_seq_length}
 			print(table)
 			static_metadata = pd.read_csv(static_metadata_file, delimiter=',', header=0)
 			repository_column_map = pd.read_csv(repository_column_map_file, delimiter=',', header=0)
