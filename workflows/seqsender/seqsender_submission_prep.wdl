@@ -130,6 +130,7 @@ task prepare_seqsender_submission {
 		def filter_table_by_biosample(table, biosample_schema, static_metadata, repository_column_map, entity_id) -> Tuple [pd.DataFrame, list, list]:
 			
 			table = table.copy()
+			table['entity_id_copy'] = table[entity_id]
 			
 			tree = ET.parse(biosample_schema)
 			root = tree.getroot()
@@ -165,7 +166,7 @@ task prepare_seqsender_submission {
 			rename_dict = repository_column_map.set_index('terra')['biosample'].dropna().to_dict()
 			table.rename(columns=rename_dict,inplace = True)
 
-			# handle errors here
+			# handle errors here caused by missing collection dates
 			columns_needed = ['isolate_prefix','sample_name', 'collection_date']
 			if all(column in table.columns for column in columns_needed):
 				table['isolate'] = table.apply(format_biosample_isolate_name, axis = 1)
