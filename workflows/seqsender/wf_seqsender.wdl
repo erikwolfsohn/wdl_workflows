@@ -98,14 +98,12 @@ task seqsender_submit {
 		~{true='--fasta_file' false='' have_fasta} ~{concatenated_fasta} \
 		~{true='--test' false='' test}
 
-		cd "~{submission_dir}"
-		tar -cvzf "~{submission_name}_results.tar.gz" "~{submission_name}/submission_files"
-		ls
-
+		tar -cvzf "~{submission_name}_results.tar.gz" "~{submission_dir}/~{submission_name}/submission_files"
+		cp "~{submission_dir}/submission_log.csv"  "~{submission_name}_submission_log.csv"
 	>>>
 
 	output {
-		File? submission_log = "submission_log.csv"
+		File? submission_log = "~{submission_name}_submission_log.csv"
 		File? submission_results = "~{submission_name}_results.tar.gz"
 		}
 
