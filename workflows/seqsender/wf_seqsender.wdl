@@ -86,8 +86,8 @@ task seqsender_status {
 	}
 
 	command <<<
-		~{true='chmod +x ' false='' submit_to_gisaid} ~{gisaid_cov_cli}
-		~{true='mv ' false='' submit_to_gisaid} ~{gisaid_cov_cli} ~{true=' /seqsender/gisaid_cli/' false='' submit_to_gisaid}
+		~{true='chmod +x' false='' submit_to_gisaid} ~{gisaid_cov_cli}
+		~{true='mv' false='' submit_to_gisaid} ~{gisaid_cov_cli} ~{true='/seqsender/gisaid_cli/' false='' submit_to_gisaid}
 
 		tar -zxvf "~{submission_tgz}"
 		mv "~{config_yaml}" "data/~{submission_name}_config.yaml"
@@ -160,8 +160,8 @@ task seqsender_submit {
 	}
 
 	command <<<
-		~{true='chmod +x ' false='' submit_to_gisaid} ~{gisaid_cov_cli}
-		~{true='mv ' false='' submit_to_gisaid} ~{gisaid_cov_cli} ~{true=' /seqsender/gisaid_cli/' false='' submit_to_gisaid}
+		~{true='chmod +x' false='' submit_to_gisaid} ~{gisaid_cov_cli}
+		~{true='mv' false='' submit_to_gisaid} ~{gisaid_cov_cli} ~{true='/seqsender/gisaid_cli/' false='' submit_to_gisaid}
 
 		python /seqsender/seqsender.py \
 		submit \
