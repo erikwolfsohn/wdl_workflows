@@ -77,6 +77,7 @@ task seqsender_status {
 	File? submission_tgz
 	File? submission_log
 	File? gisaid_cov_cli
+	Boolean submit_to_gisaid
 	Int memory = 8
 	Int cpu = 2
 	String docker_image = "ewolfsohn/seqsender:v1.2.0_terratools"
