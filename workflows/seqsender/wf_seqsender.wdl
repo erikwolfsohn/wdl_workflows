@@ -54,6 +54,7 @@ workflow seqsender {
 				submission_tgz = submission_tgz,
 				submission_log = submission_log,
 				config_yaml = config_yaml,
+				submit_to_gisaid = submit_to_gisaid,
 				gisaid_cov_cli = gisaid_cov_cli
 		}
 	}
