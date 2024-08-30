@@ -158,8 +158,8 @@ task seqsender_submit {
 	}
 
 	command <<<
-		chmod +x ~{gisaid_cov_cli}
-		mv ~{gisaid_cov_cli} /seqsender/gisaid_cli/
+		~{true='chmod +x ~{gisaid_cov_cli}' false='' submit_to_gisaid}
+		~{true='mv ~{gisaid_cov_cli} /seqsender/gisaid_cli/' false='' submit_to_gisaid}
 
 		python /seqsender/seqsender.py \
 		submit \
