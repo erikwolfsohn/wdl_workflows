@@ -176,6 +176,8 @@ task prepare_seqsender_submission {
 
 			mandatory_list.append(entity_id)
 			mandatory_list.append('sample_name')
+			if 'description' not in optional_list:
+				optional_list.append('description')
 
 			try:
 				mandatory_list.remove('collection_date')
@@ -212,7 +214,7 @@ task prepare_seqsender_submission {
 			table = table.copy()
 
 			mandatory_list = [entity_id, "sample_name", "library_name", "library_strategy", "library_source", "library_selection", "library_layout", "platform", "instrument_model", "design_description", "file_1", "platform","file_location"]
-			optional_list = ["file_2","file_3","file_4","assembly","fasta_file", "biosample_accession"]
+			optional_list = ["file_2","file_3","file_4","assembly","fasta_file", "biosample_accession", "title"]
 			
 
 			all_attributes = mandatory_list + optional_list
