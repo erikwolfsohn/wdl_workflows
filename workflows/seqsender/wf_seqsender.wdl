@@ -63,6 +63,7 @@ workflow seqsender {
 		File? seqsender_submit_log = seqsender_submit.submission_log
 		File? seqsender_submit_results = seqsender_submit.submission_results
 		File? seqsender_submit_summary = seqsender_submit.submission_summary
+		String? seqsender_submission_name = seqsender_submit.submission_name
 		File? seqsender_status_log = seqsender_status.status_log
 		File? seqsender_status_results = seqsender_status.status_results
 		File? seqsender_status_summary = seqsender_status.status_summary
@@ -184,6 +185,7 @@ task seqsender_submit {
 		File? submission_log = "~{submission_name}_submission_log.csv"
 		File? submission_results = "~{submission_name}_results.tar.gz"
 		File? submission_summary = "~{submission_name}_submission_summary.txt"
+		String? submission_name = "~{submission_name}"
 		}
 
 	runtime {
