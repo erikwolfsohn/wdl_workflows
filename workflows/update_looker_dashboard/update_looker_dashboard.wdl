@@ -107,7 +107,7 @@ task update_dashboard {
 							if attribute_name in attributes:
 								value = attributes[attribute_name]
 
-							values.append(str(value))
+							values.append(str(value).replace(',', '.'))
 
 						tsvout.write(",".join(values) + "\n")
 						row_num += 1
