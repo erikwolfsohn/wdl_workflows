@@ -22,9 +22,9 @@ workflow update_looker_dashboard {
 	if (defined(fastp_json_column_name)) {
 		call parse_fastp_json {
 			input:
+				table_csv = update_dashboard.table_csv,
 				fastp_json_column_name = fastp_json_column_name,
-				dashboard_data_dir = dashboard_data_dir,
-				table_csv = update_dashboard.table_csv
+				dashboard_data_dir = dashboard_data_dir
 		}
 	}
 
@@ -34,74 +34,6 @@ workflow update_looker_dashboard {
 	}
 }
 
-task parse_fastp_json {
-	input {
-		File table_csv
-		String? fastp_json_column_name
-		String dashboard_data_dir
-		String docker = "us-docker.pkg.dev/general-theiagen/theiagen/terra-tools:2023-03-16"
-		Int memory = 8
-		Int cpu = 4
-		Int disk_size = 100
-	}
-
-	command <<<
-		set -euo pipefail
-
-		python3 <<CODE
-		import pandas as pd
-		table = pd.read_csv("~{table_csv}")
-
-		gsutil_commands = table["~{fastp_json_column_name}"].apply(lambda x: f"gsutil cp {x} .").tolist()
-
-		for command in gsutil_commands:
-			try:
-				print(f"Executing: {command}")
-				subprocess.run(command, shell=True, check=True)
-			except subprocess.CalledProcessError as e:
-				print(f"Command failed: {command}")
-		
-		fastp_json_files = [command.split('/')[-1].split(' ')[0] for command in gsutil_commands]
-
-		histograms = {}
-
-		for file in fastp_json_files:
-			with open(file, 'r') as f:
-				data = json.load(f)
-				filename = Path(file).stem
-				histograms[filename] = data["insert_size"]["histogram"]
-
-		long_format_data = []
-
-		for filename, histogram in histograms.items():
-			for insert_size, count in enumerate(histogram, start=1):
-				long_format_data.append({
-					"Filename": filename,
-					"Insert Size": insert_size,
-					"Count": count
-				})
-
-		long_format_df = pd.DataFrame(long_format_data)
-
-		long_format_df.to_csv("insert_size_histogram.csv", index=False)
-
-		CODE
-
-		gsutil cp "insert_size_histogram.csv" "~{dashboard_data_dir}/insert_size_histogram.csv"
-	>>>
-	output {
-		File insert_size_histogram = "insert_size_histogram.csv"
-	}
-
-	runtime {
-		docker: docker
-		memory: memory + " GB"
-		cpu: cpu
-		disks:  "local-disk " + disk_size + " SSD"
-		disk: disk_size + " GB"
-		preemptible: 0
-	}
-}
 
 task update_dashboard {
 	input{
@@ -231,4 +163,74 @@ task update_dashboard {
 		preemptible: 0
 	}
 
+}
+
+task parse_fastp_json {
+	input {
+		File table_csv
+		String? fastp_json_column_name
+		String dashboard_data_dir
+		String docker = "us-docker.pkg.dev/general-theiagen/theiagen/terra-tools:2023-03-16"
+		Int memory = 8
+		Int cpu = 4
+		Int disk_size = 100
+	}
+
+	command <<<
+		set -euo pipefail
+
+		python3 <<CODE
+		import pandas as pd
+		import subprocess
+		table = pd.read_csv("~{table_csv}")
+
+		gsutil_commands = table["~{fastp_json_column_name}"].apply(lambda x: f"gsutil cp {x} .").tolist()
+
+		for command in gsutil_commands:
+			try:
+				print(f"Executing: {command}")
+				subprocess.run(command, shell=True, check=True)
+			except subprocess.CalledProcessError as e:
+				print(f"Command failed: {command}")
+		
+		fastp_json_files = [command.split('/')[-1].split(' ')[0] for command in gsutil_commands]
+
+		histograms = {}
+
+		for file in fastp_json_files:
+			with open(file, 'r') as f:
+				data = json.load(f)
+				filename = Path(file).stem
+				histograms[filename] = data["insert_size"]["histogram"]
+
+		long_format_data = []
+
+		for filename, histogram in histograms.items():
+			for insert_size, count in enumerate(histogram, start=1):
+				long_format_data.append({
+					"Filename": filename,
+					"Insert Size": insert_size,
+					"Count": count
+				})
+
+		long_format_df = pd.DataFrame(long_format_data)
+
+		long_format_df.to_csv("insert_size_histogram.csv", index=False)
+
+		CODE
+
+		gsutil cp "insert_size_histogram.csv" "~{dashboard_data_dir}/insert_size_histogram.csv"
+	>>>
+	output {
+		File insert_size_histogram = "insert_size_histogram.csv"
+	}
+
+	runtime {
+		docker: docker
+		memory: memory + " GB"
+		cpu: cpu
+		disks:  "local-disk " + disk_size + " SSD"
+		disk: disk_size + " GB"
+		preemptible: 0
+	}
 }
