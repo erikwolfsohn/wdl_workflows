@@ -234,7 +234,7 @@ task parse_fastp_json {
 
 		long_format_df = pd.DataFrame(long_format_data)
 
-		merged_long_format_df = table.merge(long_format_df, left_on='clean_sample', right_on=long_format_df['Filename'].apply(lambda x: next((y for y in table['clean_sample'] if y in x), None)))
+		merged_long_format_df = table.merge(long_format_df, left_on='~{table_name}_id', right_on=long_format_df['Filename'].apply(lambda x: next((y for y in table['~{table_name}_id'] if y in x), None)))
 
 		merged_long_format_df.to_csv("insert_size_histogram.csv", index=False)
 
