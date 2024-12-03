@@ -45,6 +45,7 @@ workflow update_looker_dashboard {
 	output {
 		File table_csv = update_dashboard.table_csv
 		File? insert_size_histogram = parse_fastp_json.insert_size_histogram
+		File? updated_deidentifier_table = update_deidentified_ids.updated_deidentifier_table
 	}
 }
 
@@ -299,4 +300,17 @@ task update_deidentified_ids {
 
 		python3 import_large_tsv.py --project "~{project_name}" --workspace "~{workspace_name}" --tsv "updated_deidentifiers.tsv"
 	>>>
+
+	output {
+		File updated_deidentifier_table = "updated_deidentifiers.tsv"
+	}
+
+	runtime {
+		docker: docker
+		memory: memory + " GB"
+		cpu: cpu
+		disks:  "local-disk " + disk_size + " SSD"
+		disk: disk_size + " GB"
+		preemptible: 0
+	}
 }
