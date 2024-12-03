@@ -236,6 +236,7 @@ task parse_fastp_json {
 		long_format_df['Filename'] = long_format_df['Filename'].str.replace(r'_fastp$', '', regex=True)
 
 		merged_long_format_df = table.merge(long_format_df, left_on='~{table_name}_id', right_on='Filename', how='inner')
+		merged_long_format_df = merged_long_format_df.drop(columns=["~{fastp_json_column_name}", 'Filename'])
 
 		merged_long_format_df.to_csv("insert_size_histogram.csv", index=False)
 
