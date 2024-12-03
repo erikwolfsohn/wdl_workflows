@@ -184,7 +184,7 @@ task parse_fastp_json {
 		import subprocess
 		table = pd.read_csv("~{table_csv}")
 
-		gsutil_commands = [f"gsutil cp {x} ." for x in data["~{fastp_json_column_name}"].dropna() if str(x).startswith("gs://")]
+		gsutil_commands = [f"gsutil cp {x} ." for x in table["~{fastp_json_column_name}"].dropna() if str(x).startswith("gs://")]
 
 		for command in gsutil_commands:
 			try:
