@@ -273,14 +273,17 @@ task update_deidentified_ids {
 		import pandas as pd
 		import re
 
+		deidentified_prefix = "~{deidentifier_prefix}"
+		deidentified_column = "~{deidentified_column_name}"
+
 		table = pd.read_csv("~{table_name}-data.tsv", sep="\t")
 
-		existing_ids = table["submission_id"].dropna()
+		existing_ids = table[deidentified_column].dropna()
 		max_n = 0
 
 
-		for submission_id in existing_ids:
-			match = re.match(r"CA-CCPHL-BACT-(\d+)", str(submission_id))
+		for deidentified_id in existing_ids:
+			match = re.match(r"{deidentified_prefix}-(\d+)", str(deidentified_id))
 			if match:
 				max_n = max(max_n, int(match.group(1)))
 
@@ -288,13 +291,13 @@ task update_deidentified_ids {
 		next_n = max_n + 1
 
 
-		for i, value in table["submission_id"].items():
+		for i, value in table[deidentified_column].items():
 			if pd.isna(value):  # Check if the value is empty
-				table.at[i, "submission_id"] = f"CA-CCPHL-BACT-{next_n}"
+				table.at[i, deidentified_column] = f"{deidentified_prefix}-{next_n}"
 				next_n += 1
 
 
-		table.to_csv("updated_deidentifiers.tsv", sep="\t", index=False)
+		table.to_csv("updated_deidentifiers.tsv", sep="\t", index=False, na_rep="")
 
 		CODE
 
