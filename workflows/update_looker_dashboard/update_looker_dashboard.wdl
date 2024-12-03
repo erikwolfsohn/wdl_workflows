@@ -8,6 +8,9 @@ workflow update_looker_dashboard {
 		String dashboard_data_dir
 		String table_data_filename
 		String? fastp_json_column_name
+		Boolean deidentify_ids = false
+		String? deidentified_column_name
+		String? deidentifier_prefix
 	}
 
 	call update_dashboard {
@@ -25,6 +28,17 @@ workflow update_looker_dashboard {
 				table_csv = update_dashboard.table_csv,
 				fastp_json_column_name = fastp_json_column_name,
 				dashboard_data_dir = dashboard_data_dir
+		}
+	}
+
+	if (deidentify_ids) { 
+		call update_deidentified_ids {
+			input:
+				table_name = table_name,
+				workspace_name = workspace_name,
+				project_name = project_name,
+				deidentified_column_name = deidentified_column_name,
+				deidentifier_prefix = deidentifier_prefix
 		}
 	}
 
@@ -235,4 +249,54 @@ task parse_fastp_json {
 		disk: disk_size + " GB"
 		preemptible: 0
 	}
+}
+
+task update_deidentified_ids {
+	input {
+		String table_name
+		String workspace_name
+		String project_name
+		String? deidentified_column_name
+		String? deidentifier_prefix
+		String docker = "us-docker.pkg.dev/general-theiagen/theiagen/terra-tools:2023-03-16"
+		Int memory = 8
+		Int cpu = 4
+		Int disk_size = 100
+	}
+
+	command <<<
+		set -euo pipefail
+		python3 export_large_tsv.py --project "~{project_name}" --workspace "~{workspace_name}" --entity_type ~{table_name} --tsv_filename ~{table_name}-data.tsv
+
+		python3 <<CODE
+		import pandas as pd
+		import re
+
+		table = pd.read_csv("~{table_name}-data.tsv", sep="\t")
+
+		existing_ids = table["submission_id"].dropna()
+		max_n = 0
+
+
+		for submission_id in existing_ids:
+			match = re.match(r"CA-CCPHL-BACT-(\d+)", str(submission_id))
+			if match:
+				max_n = max(max_n, int(match.group(1)))
+
+
+		next_n = max_n + 1
+
+
+		for i, value in table["submission_id"].items():
+			if pd.isna(value):  # Check if the value is empty
+				table.at[i, "submission_id"] = f"CA-CCPHL-BACT-{next_n}"
+				next_n += 1
+
+
+		table.to_csv("updated_deidentifiers.tsv", sep="\t", index=False)
+
+		CODE
+
+		python3 import_large_tsv.py --project "~{project_name}" --workspace "~{workspace_name}" --tsv "updated_deidentifiers.tsv"
+	>>>
 }
