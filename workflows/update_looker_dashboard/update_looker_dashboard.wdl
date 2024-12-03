@@ -27,7 +27,8 @@ workflow update_looker_dashboard {
 			input:
 				table_csv = update_dashboard.table_csv,
 				fastp_json_column_name = fastp_json_column_name,
-				dashboard_data_dir = dashboard_data_dir
+				dashboard_data_dir = dashboard_data_dir,
+				table_name = table_name
 		}
 	}
 
@@ -185,6 +186,7 @@ task parse_fastp_json {
 		File table_csv
 		String? fastp_json_column_name
 		String dashboard_data_dir
+		String table_name
 		String docker = "us-docker.pkg.dev/general-theiagen/theiagen/terra-tools:2023-03-16"
 		Int memory = 8
 		Int cpu = 4
@@ -232,7 +234,9 @@ task parse_fastp_json {
 
 		long_format_df = pd.DataFrame(long_format_data)
 
-		long_format_df.to_csv("insert_size_histogram.csv", index=False)
+		merged_long_format_df = table.merge(long_format_df, left_on='clean_sample', right_on=long_format_df['Filename'].apply(lambda x: next((y for y in df1['clean_sample'] if y in x), None)))
+
+		merged_long_format_df.to_csv("insert_size_histogram.csv", index=False)
 
 		CODE
 
