@@ -182,6 +182,8 @@ task parse_fastp_json {
 		python3 <<CODE
 		import pandas as pd
 		import subprocess
+		import json
+		from pathlib import Path
 		table = pd.read_csv("~{table_csv}")
 
 		gsutil_commands = [f"gsutil cp {x} ." for x in table["~{fastp_json_column_name}"].dropna() if str(x).startswith("gs://")]
