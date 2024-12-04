@@ -229,16 +229,19 @@ task parse_fastp_json {
 		from pathlib import Path
 		table = pd.read_csv("~{table_csv}")
 
-		gsutil_commands = [f"gsutil cp {x} ." for x in table["~{fastp_json_column_name}"].dropna() if str(x).startswith("gs://")]
+		gs_urls = table["~{fastp_json_column_name}"].dropna()
+		gs_urls = [str(x) for x in gs_urls if str(x).startswith("gs://")]
 
-		for command in gsutil_commands:
-			try:
-				print(f"Executing: {command}")
-				subprocess.run(command, shell=True, check=True)
-			except subprocess.CalledProcessError as e:
-				print(f"Command failed: {command}")
-		
-		fastp_json_files = [command.split('/')[-1].split(' ')[0] for command in gsutil_commands]
+		with open("gs_files.txt", "w") as f:
+			f.write("\n".join(gs_urls))
+
+		try:
+			print("Executing: gsutil -m cp -I")
+			subprocess.run("gsutil -m cp -I < gs_files.txt", shell=True, check=True)
+		except subprocess.CalledProcessError as e:
+			print(f"gsutil command failed: {e}")
+
+		fastp_json_files = [url.split('/')[-1] for url in gs_urls]
 
 		histograms = {}
 
