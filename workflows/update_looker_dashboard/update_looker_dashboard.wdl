@@ -12,6 +12,7 @@ workflow update_looker_dashboard {
 		Boolean deidentify_ids = false
 		String? deidentified_column_name
 		String? deidentifier_prefix
+		String? dashboard_columns
 	}
 
 	if (deidentify_ids) { 
@@ -26,6 +27,7 @@ workflow update_looker_dashboard {
 
 		call update_dashboard as update_dashboard_deidentified {
 			input:
+				dashboard_columns = dashboard_columns,
 				drop_entity_name_column = drop_entity_name_column,
 				deidentify_complete = update_deidentified_ids.deidentify_complete,
 				table_name = table_name,
@@ -49,6 +51,7 @@ workflow update_looker_dashboard {
 	if (!deidentify_ids) { 
 		call update_dashboard {
 			input:
+				dashboard_columns = dashboard_columns,
 				drop_entity_name_column = drop_entity_name_column,
 				table_name = table_name,
 				project_name = project_name,
