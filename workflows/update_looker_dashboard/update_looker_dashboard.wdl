@@ -94,7 +94,6 @@ task update_dashboard {
 
 	command <<<
 		set -euo pipefail
-		print("~{deidentify_complete}")
 
 		python3 <<CODE
 		from firecloud import api as fapi
@@ -103,6 +102,7 @@ task update_dashboard {
 		import math
 
 		DEFAULT_PAGE_SIZE = 1000
+		print("~{deidentify_complete}")
 
 
 		def get_entity_by_page(project, workspace, entity_type, page, page_size=DEFAULT_PAGE_SIZE, sort_direction='asc', filter_terms=None):
