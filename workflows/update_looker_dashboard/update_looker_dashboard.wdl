@@ -2,6 +2,7 @@ version 1.0
 
 workflow update_looker_dashboard {
 	input {
+		String drop_entity_name_column = "no"
 		String table_name
 		String workspace_name
 		String project_name
@@ -25,6 +26,7 @@ workflow update_looker_dashboard {
 
 		call update_dashboard as update_dashboard_deidentified {
 			input:
+				drop_entity_name_column = drop_entity_name_column,
 				deidentify_complete = update_deidentified_ids.deidentify_complete,
 				table_name = table_name,
 				project_name = project_name,
@@ -47,6 +49,7 @@ workflow update_looker_dashboard {
 	if (!deidentify_ids) { 
 		call update_dashboard {
 			input:
+				drop_entity_name_column = drop_entity_name_column,
 				table_name = table_name,
 				project_name = project_name,
 				workspace_name = workspace_name,
@@ -83,7 +86,7 @@ task update_dashboard {
 		String project_name
 		String dashboard_data_dir
 		String table_data_filename
-		String drop_entity_name_column = "yes"
+		String drop_entity_name_column
 		Int page_size = 1000
 		String? dashboard_columns
 		String docker = "us-docker.pkg.dev/general-theiagen/theiagen/terra-tools:2023-03-16"
