@@ -13,25 +13,6 @@ workflow update_looker_dashboard {
 		String? deidentifier_prefix
 	}
 
-	call update_dashboard {
-		input:
-			table_name = table_name,
-			project_name = project_name,
-			workspace_name = workspace_name,
-			dashboard_data_dir = dashboard_data_dir,
-			table_data_filename = table_data_filename
-	}
-
-	if (defined(fastp_json_column_name)) {
-		call parse_fastp_json {
-			input:
-				table_csv = update_dashboard.table_csv,
-				fastp_json_column_name = fastp_json_column_name,
-				dashboard_data_dir = dashboard_data_dir,
-				table_name = table_name
-		}
-	}
-
 	if (deidentify_ids) { 
 		call update_deidentified_ids {
 			input:
@@ -41,11 +22,54 @@ workflow update_looker_dashboard {
 				deidentified_column_name = deidentified_column_name,
 				deidentifier_prefix = deidentifier_prefix
 		}
+
+		call update_dashboard as update_dashboard_deidentified {
+			input:
+				deidentify_complete = update_deidentified_ids.deidentify_complete,
+				table_name = table_name,
+				project_name = project_name,
+				workspace_name = workspace_name,
+				dashboard_data_dir = dashboard_data_dir,
+				table_data_filename = table_data_filename
+		}
+
+		if (defined(fastp_json_column_name)) {
+			call parse_fastp_json as parse_fastp_json_deidentified {
+				input:
+					table_csv = update_dashboard_deidentified.table_csv,
+					fastp_json_column_name = fastp_json_column_name,
+					dashboard_data_dir = dashboard_data_dir,
+					table_name = table_name
+			}
+		}
+	}
+
+	if (!deidentify_ids) { 
+		call update_dashboard {
+			input:
+				table_name = table_name,
+				project_name = project_name,
+				workspace_name = workspace_name,
+				dashboard_data_dir = dashboard_data_dir,
+				table_data_filename = table_data_filename
+		}
+
+		if (defined(fastp_json_column_name)) {
+			call parse_fastp_json {
+				input:
+					table_csv = update_dashboard.table_csv,
+					fastp_json_column_name = fastp_json_column_name,
+					dashboard_data_dir = dashboard_data_dir,
+					table_name = table_name
+			}
+		}
 	}
 
 	output {
-		File table_csv = update_dashboard.table_csv
+		File? table_csv = update_dashboard.table_csv
+		File? table_csv_deidentified = update_dashboard_deidentified.table_csv
 		File? insert_size_histogram = parse_fastp_json.insert_size_histogram
+		File? insert_size_histogram_deidentified = parse_fastp_json_deidentified.insert_size_histogram
 		File? updated_deidentifier_table = update_deidentified_ids.updated_deidentifier_table
 	}
 }
@@ -53,6 +77,7 @@ workflow update_looker_dashboard {
 
 task update_dashboard {
 	input{
+		String? deidentify_complete
 		String table_name
 		String workspace_name
 		String project_name
@@ -69,6 +94,7 @@ task update_dashboard {
 
 	command <<<
 		set -euo pipefail
+		print("~{deidentify_complete}")
 
 		python3 <<CODE
 		from firecloud import api as fapi
@@ -312,6 +338,7 @@ task update_deidentified_ids {
 
 	output {
 		File updated_deidentifier_table = "updated_deidentifiers.tsv"
+		String deidentify_complete = "complete"
 	}
 
 	runtime {
