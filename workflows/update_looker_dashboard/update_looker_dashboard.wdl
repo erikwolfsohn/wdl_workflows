@@ -40,6 +40,7 @@ workflow update_looker_dashboard {
 		if (defined(fastp_json_column_name)) {
 			call parse_fastp_json as parse_fastp_json_deidentified {
 				input:
+					histogram_column_name = deidentified_column_name,
 					table_csv = update_dashboard_deidentified.table_csv,
 					fastp_json_column_name = fastp_json_column_name,
 					dashboard_data_dir = dashboard_data_dir,
@@ -64,6 +65,7 @@ workflow update_looker_dashboard {
 			call parse_fastp_json {
 				input:
 					table_csv = update_dashboard.table_csv,
+					histogram_column_name = table_name,
 					fastp_json_column_name = fastp_json_column_name,
 					dashboard_data_dir = dashboard_data_dir,
 					table_name = table_name
@@ -217,6 +219,7 @@ task parse_fastp_json {
 	input {
 		File table_csv
 		String? fastp_json_column_name
+		String? histogram_column_name
 		String dashboard_data_dir
 		String table_name
 		String docker = "us-docker.pkg.dev/general-theiagen/theiagen/terra-tools:2023-03-16"
@@ -243,7 +246,7 @@ task parse_fastp_json {
 
 		try:
 			print("Executing: gsutil -m cp -I")
-			subprocess.run("gsutil -m cp -I < gs_files.txt", shell=True, check=True)
+			subprocess.run("gsutil -m cp -I . < gs_files.txt", shell=True, check=True)
 		except subprocess.CalledProcessError as e:
 			print(f"gsutil command failed: {e}")
 
@@ -272,6 +275,7 @@ task parse_fastp_json {
 
 		merged_long_format_df = table.merge(long_format_df, left_on='~{table_name}_id', right_on='Filename', how='inner')
 		merged_long_format_df = merged_long_format_df.drop(columns=["~{fastp_json_column_name}", 'Filename'])
+		merged_long_format_df = merged_long_format_df[["~{histogram_column_name}", "Insert Size", "Count"]]
 
 		merged_long_format_df.to_csv("insert_size_histogram.csv", index=False)
 
