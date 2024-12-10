@@ -7,6 +7,7 @@ workflow update_looker_dashboard {
 		String workspace_name
 		String project_name
 		String dashboard_data_dir
+		String fastp_insert_size_data_dir
 		String table_data_filename
 		String? fastp_json_column_name
 		Boolean deidentify_ids = false
@@ -40,10 +41,10 @@ workflow update_looker_dashboard {
 		if (defined(fastp_json_column_name)) {
 			call parse_fastp_json as parse_fastp_json_deidentified {
 				input:
+					fastp_insert_size_data_dir = fastp_insert_size_data_dir,
 					histogram_column_name = deidentified_column_name,
 					table_csv = update_dashboard_deidentified.table_csv,
 					fastp_json_column_name = fastp_json_column_name,
-					dashboard_data_dir = dashboard_data_dir,
 					table_name = table_name
 			}
 		}
@@ -64,10 +65,10 @@ workflow update_looker_dashboard {
 		if (defined(fastp_json_column_name)) {
 			call parse_fastp_json {
 				input:
+					fastp_insert_size_data_dir = fastp_insert_size_data_dir,
 					table_csv = update_dashboard.table_csv,
 					histogram_column_name = table_name,
 					fastp_json_column_name = fastp_json_column_name,
-					dashboard_data_dir = dashboard_data_dir,
 					table_name = table_name
 			}
 		}
@@ -218,9 +219,9 @@ task update_dashboard {
 task parse_fastp_json {
 	input {
 		File table_csv
+		String fastp_insert_size_data_dir
 		String? fastp_json_column_name
 		String? histogram_column_name
-		String dashboard_data_dir
 		String table_name
 		String docker = "us-docker.pkg.dev/general-theiagen/theiagen/terra-tools:2023-03-16"
 		Int memory = 8
@@ -280,8 +281,8 @@ task parse_fastp_json {
 		merged_long_format_df.to_csv("insert_size_histogram.csv", index=False)
 
 		CODE
-
-		gsutil cp "insert_size_histogram.csv" "~{dashboard_data_dir}/insert_size_histogram.csv"
+		
+		gsutil cp "insert_size_histogram.csv" "~{fastp_insert_size_data_dir}/insert_size_histogram.csv"
 	>>>
 	output {
 		File insert_size_histogram = "insert_size_histogram.csv"
