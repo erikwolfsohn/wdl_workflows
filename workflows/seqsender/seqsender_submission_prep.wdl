@@ -106,8 +106,8 @@ task prepare_seqsender_submission {
 
 		current_dir=$(pwd)
 		#change this back when using in terra
-		python /seqsender/export_large_tsv.py --project "~{project_name}" --workspace "~{workspace_name}" --entity_type ~{table_name} --tsv_filename ~{table_name}-data.tsv
-		#cp ~{input_table} ~{table_name}-data.tsv
+		#python /seqsender/export_large_tsv.py --project "~{project_name}" --workspace "~{workspace_name}" --entity_type ~{table_name} --tsv_filename ~{table_name}-data.tsv
+		cp ~{input_table} ~{table_name}-data.tsv
 		biosample_schema_file=$(find /seqsender/config/biosample/ -type f -name "~{biosample_schema_name}")
 
 		python3 <<CODE
@@ -300,10 +300,10 @@ task prepare_seqsender_submission {
 
 			return filtered_table_df, missing_mandatory, mandatory_list
 
-		def filter_table_by_genbank(table, static_metadata, repository_column_map, entity_id) -> Tuple[pd.DataFrame, list, list]:
+		def filter_table_by_genbank(table, static_metadata, repository_column_map, entity_id, outdir) -> Tuple[pd.DataFrame, list, list]:
 			table = table.copy()
 
-			mandatory_list = [entity_id, 'gb-sample_name', 'src-geo_loc_name', 'src-Isolate',
+			mandatory_list = [entity_id, 'fasta_column', 'gb-sample_name', 'src-geo_loc_name', 'src-Isolate',
 							'src-Isolation-source']
 
 			optional_list = ['gb-fasta_definition_line_modifiers', 'gb-title', 'gb-comment',
@@ -343,6 +343,9 @@ task prepare_seqsender_submission {
 			remove_nas(entity_id, filtered_table_df, mandatory_list)
 			# Only rename entity_id; seqsender column names already carry their own prefixes (gb-/src-/cmt-)
 			filtered_table_df.rename(columns={entity_id: f'gb-{entity_id}'}, inplace=True)
+
+			filtered_table_df[['fasta_column', 'gb-sample_name']].to_csv(f'{outdir}/fasta_filepaths.csv', index=False, header=False)
+
 			return filtered_table_df, missing_mandatory, mandatory_list
 
 		def filter_table_by_shared(table, static_metadata, repository_column_map, entity_id) -> Tuple [pd.DataFrame, list, list]:
@@ -443,7 +446,7 @@ task prepare_seqsender_submission {
 				gisaid_filtered_table.to_csv(f'{outdir}/gisaid_table.csv', header=True, index=False, sep=",")
 
 			if 'gb' in db_selection:
-				genbank_filtered_table, missing_genbank, mandatory_genbank_list = filter_table_by_genbank(table, static_metadata, repository_column_map, entity_id)
+				genbank_filtered_table, missing_genbank, mandatory_genbank_list = filter_table_by_genbank(table, static_metadata, repository_column_map, entity_id, outdir)
 				print(f"Missing GenBank fields: {missing_genbank}")
 				genbank_filtered_table.to_csv(f'{outdir}/genbank_table.csv', header=True, index=False, sep=",")
 
@@ -470,12 +473,12 @@ task prepare_seqsender_submission {
 				)
 
 
-			columns_to_remove = [f'gs-{entity_id}', f'bs-{entity_id}', entity_id, f'sra-{entity_id}', 'gs-fasta_column', 'gs-submission_id']
+			columns_to_remove = [f'gs-{entity_id}', f'bs-{entity_id}', entity_id, f'sra-{entity_id}', 'gs-fasta_column', 'gs-submission_id', 'fasta_column']
 			columns_to_remove = [col for col in columns_to_remove if col in merged_metadata_tables.columns]
 			merged_metadata_tables.drop(columns=columns_to_remove, inplace=True)
 
 			#todo: figure out why organism column is duplicating
-    		merged_metadata_tables = merged_metadata_tables.loc[:, ~merged_metadata_tables.columns.duplicated()]
+			merged_metadata_tables = merged_metadata_tables.loc[:, ~merged_metadata_tables.columns.duplicated()]
 
 			if 'bs-sample_title' not in merged_metadata_tables.columns:
 				merged_metadata_tables['bs-sample_title'] = merged_metadata_tables[['organism', 'collection_date']].astype(str).agg(' - '.join, axis=1)
