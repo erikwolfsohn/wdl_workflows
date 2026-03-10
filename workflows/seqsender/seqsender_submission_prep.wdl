@@ -191,6 +191,8 @@ task prepare_seqsender_submission {
 				table[row['key']] = row['value']
 
 			rename_dict = repository_column_map.set_index('terra')['biosample'].dropna().to_dict()
+			columns_to_drop = [col for col in rename_dict.values() if col in table.columns and col not in rename_dict.keys()]
+			table.drop(columns=columns_to_drop, inplace=True)
 			table.rename(columns=rename_dict,inplace = True)
 
 			# handle errors here caused by missing collection dates
@@ -222,6 +224,8 @@ task prepare_seqsender_submission {
 				table[row['key']] = row['value']
 
 			rename_dict = repository_column_map.set_index('terra')['sra'].dropna().to_dict()
+			columns_to_drop = [col for col in rename_dict.values() if col in table.columns and col not in rename_dict.keys()]
+			table.drop(columns=columns_to_drop, inplace=True)
 			table.rename(columns=rename_dict, inplace = True)
 
 			missing_mandatory = list(set(mandatory_list) - set(table.columns))
@@ -260,6 +264,8 @@ task prepare_seqsender_submission {
 				table[row['key']] = row['value']
 
 			rename_dict = repository_column_map.set_index('terra')['gisaid'].dropna().to_dict()
+			columns_to_drop = [col for col in rename_dict.values() if col in table.columns and col not in rename_dict.keys()]
+			table.drop(columns=columns_to_drop, inplace=True)
 			table.rename(columns=rename_dict, inplace = True)
 
 			columns_needed = ['virus_prefix','submission_id', 'collection_date']
@@ -296,6 +302,8 @@ task prepare_seqsender_submission {
 				table[row['key']] = row['value']
 
 			rename_dict = repository_column_map.set_index('terra')['gen'].dropna().to_dict()
+			columns_to_drop = [col for col in rename_dict.values() if col in table.columns and col not in rename_dict.keys()]
+			table.drop(columns=columns_to_drop, inplace=True)
 			table.rename(columns=rename_dict, inplace = True)
 
 			missing_mandatory = list(set(mandatory_list) - set(table.columns))

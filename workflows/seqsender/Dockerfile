@@ -47,7 +47,7 @@ RUN apt-get update --allow-releaseinfo-change --fix-missing \
   && rm -rf /var/lib/{apt,dpkg,cache,log}/
 
 ARG REPO_URL="https://github.com/erikwolfsohn/seqsender.git"
-ARG REPO_BRANCH="seqsender-terra-submission"
+ARG REPO_BRANCH="seqsender-genbank-update"
 
 RUN git clone --branch ${REPO_BRANCH} ${REPO_URL} /seqsender \
 	&& chmod a+x /seqsender/*.py
