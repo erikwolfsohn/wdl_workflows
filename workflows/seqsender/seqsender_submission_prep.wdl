@@ -86,7 +86,7 @@ task prepare_seqsender_submission {
 		File? input_table
 		Int memory = 8
 		Int cpu = 4
-		String docker = "ewolfsohn/seqsender:v1.2.0_terratools"
+		String docker = "ewolfsohn/seqsender-genbank-update:latest"
 		Int disk_size = 100
 		Boolean check_coverage
 		Boolean check_contigs
@@ -105,9 +105,9 @@ task prepare_seqsender_submission {
 	command <<<
 
 		current_dir=$(pwd)
-		# change this back when using in terra
+		#change this back when using in terra
 		python /seqsender/export_large_tsv.py --project "~{project_name}" --workspace "~{workspace_name}" --entity_type ~{table_name} --tsv_filename ~{table_name}-data.tsv
-		# cp ~{input_table} ~{table_name}-data.tsv
+		#cp ~{input_table} ~{table_name}-data.tsv
 		biosample_schema_file=$(find /seqsender/config/biosample/ -type f -name "~{biosample_schema_name}")
 
 		python3 <<CODE
@@ -118,18 +118,20 @@ task prepare_seqsender_submission {
 		import pandas as pd
 		from datetime import datetime
 		import json
+		import sys
 
 
 		def remove_nas(entity_id, table, required_metadata):
-			table.replace(r'^\s+$', np.nan, regex=True) 
-			excluded_samples = table[table[required_metadata].isna().any(axis=1)] 
-			excluded_samples.set_index(entity_id.lower(), inplace=True) 
-			excluded_samples = excluded_samples[excluded_samples.columns.intersection(required_metadata)] 
-			excluded_samples = excluded_samples.loc[:, excluded_samples.isna().any()] 
-			table.dropna(subset=required_metadata, axis=0, how='any', inplace=True) 
-
+			table.replace(r'^\s+$', np.nan, regex=True, inplace=True)   # also fixes Bug 4
+			present = [col for col in required_metadata if col in table.columns]
+			if not present:
+				return table, pd.DataFrame()
+			excluded_samples = table[table[present].isna().any(axis=1)]
+			excluded_samples.set_index(entity_id.lower(), inplace=True)
+			excluded_samples = excluded_samples[excluded_samples.columns.intersection(required_metadata)]
+			excluded_samples = excluded_samples.loc[:, excluded_samples.isna().any()]
+			table.dropna(subset=present, axis=0, how='any', inplace=True)
 			return table, excluded_samples
-
 
 		def format_location(row):
 			return f"{row['continent']}/{row['country']}/{row['state']}/{row['county']}"
@@ -137,26 +139,39 @@ task prepare_seqsender_submission {
 		def format_gisaid_virus_name(row):
 			try:
 				year = datetime.strptime(row['collection_date'], '%Y-%m-%d').year
-			except ValueError:
+			except (ValueError, TypeError, AttributeError):
 				year = None
-				
 			return f"{row['virus_prefix']}/{row['country']}/{row['submission_id']}/{year}"
+
+		def format_genbank_isolate(row):
+			try:
+				year = datetime.strptime(row['collection_date'], '%Y-%m-%d').year
+			except (ValueError, TypeError, AttributeError):
+				year = None
+			return f"{row['isolate_prefix']}/{row['country']}/{row['gb-sample_name']}/{year}"
+			# in a flu table this must be VirusType / Host / GeographicOrigin / IsolateID / Year
+			# ex: "A/Human/USA/CA-CDPH-001/2023"
+			# isolate_prefix = A/Human/
+
+			# in a cov table this must be hCoV-19 / Location / LabID / Year
+			# ex: hCoV-19/USA/CA-CDPH-001/2024
+			# isolate prefix = hCoV-19
+
+			# for other organisms it can just be the lab code ex: CCPHL
 
 
 		def format_biosample_isolate_name(row):
 			try:
 				year = datetime.strptime(row['collection_date'], '%Y-%m-%d').year
-			except ValueError:
+			except (ValueError, TypeError, AttributeError):
 				year = None
-				
 			return f"{row['isolate_prefix']}/{row['country']}/{row['sample_name']}/{year}"
 
 
 		def filter_table_by_biosample(table, biosample_schema, static_metadata, repository_column_map, entity_id) -> Tuple [pd.DataFrame, list, list]:
-			
 			table = table.copy()
 			table['entity_id_copy'] = table[entity_id]
-			
+
 			tree = ET.parse(biosample_schema)
 			root = tree.getroot()
 
@@ -166,13 +181,10 @@ task prepare_seqsender_submission {
 			for attribute in root.findall('.//Attribute'):
 				use = attribute.get('use')
 				name = attribute.find('HarmonizedName').text if attribute.find('HarmonizedName') is not None else "Unknown"
-
-
 				if use == 'mandatory':
 					mandatory_list.append(name)
-				elif use == 'optional': 
+				elif use == 'optional':
 					optional_list.append(name)
-			
 
 			mandatory_list.append(entity_id)
 			mandatory_list.append('sample_name')
@@ -181,69 +193,68 @@ task prepare_seqsender_submission {
 
 			try:
 				mandatory_list.remove('collection_date')
-			except ValueError:
+			except (ValueError, TypeError, AttributeError):
 				print('Specimen is missing a collection date. It will probably fail submission.')
 
-
 			all_attributes = mandatory_list + optional_list
+
+
+			rename_dict = repository_column_map.set_index('terra')['biosample'].dropna().to_dict()
+			table.rename(columns=rename_dict,inplace = True)
 
 			for index, row in static_metadata[static_metadata['db'].isin(['bs'])].iterrows():
 				table[row['key']] = row['value']
 
-			rename_dict = repository_column_map.set_index('terra')['biosample'].dropna().to_dict()
-			columns_to_drop = [col for col in rename_dict.values() if col in table.columns and col not in rename_dict.keys()]
-			table.drop(columns=columns_to_drop, inplace=True)
-			table.rename(columns=rename_dict,inplace = True)
 
-			# handle errors here caused by missing collection dates
-			columns_needed = ['isolate_prefix','sample_name', 'collection_date']
+
+			columns_needed = ['isolate_prefix', 'sample_name', 'collection_date']
 			if all(column in table.columns for column in columns_needed):
-				table['isolate'] = table.apply(format_biosample_isolate_name, axis = 1)
+				table['isolate'] = table.apply(format_biosample_isolate_name, axis=1, result_type='reduce')
+			
 
 			missing_mandatory = list(set(mandatory_list) - set(table.columns))
-
-
 			filtered_table_df = table[[col for col in table.columns if col in all_attributes]]
 
 			if missing_mandatory:
 				print("Your Terra table is missing the following required attributes for BioSample submission: " + str(missing_mandatory))
-			
+
 			remove_nas(entity_id, filtered_table_df, mandatory_list)
 			filtered_table_df.columns = ['bs-' + col for col in filtered_table_df.columns]
 			return filtered_table_df, missing_mandatory, mandatory_list
 
 		def filter_table_by_sra(table, static_metadata, repository_column_map, entity_id, outdir, cloud_uri = None) -> Tuple [pd.DataFrame, list, list]:
 			table = table.copy()
+			table['entity_id_copy'] = table[entity_id]
 
-			mandatory_list = [entity_id, "sample_name", "library_name", "library_strategy", "library_source", "library_selection", "library_layout", "platform", "instrument_model", "design_description", "file_1", "platform","file_location"]
-			optional_list = ["file_2","file_3","file_4","assembly","fasta_file", "biosample_accession", "title"]
+			mandatory_list = [entity_id, "sample_name", "library_name", "library_strategy", "library_source",
+							"library_selection", "library_layout", "platform", "instrument_model",
+							"design_description", "file_1", "platform", "file_location"]
+			optional_list = ["file_2", "file_3", "file_4", "assembly", "fasta_file", "biosample_accession", "title"]
 			
-
 			all_attributes = mandatory_list + optional_list
+
+
+			rename_dict = repository_column_map.set_index('terra')['sra'].dropna().to_dict()
+			table.rename(columns=rename_dict,inplace = True)
+
 			for index, row in static_metadata[static_metadata['db'].isin(['sra'])].iterrows():
 				table[row['key']] = row['value']
 
-			rename_dict = repository_column_map.set_index('terra')['sra'].dropna().to_dict()
-			columns_to_drop = [col for col in rename_dict.values() if col in table.columns and col not in rename_dict.keys()]
-			table.drop(columns=columns_to_drop, inplace=True)
-			table.rename(columns=rename_dict, inplace = True)
 
 			missing_mandatory = list(set(mandatory_list) - set(table.columns))
-			
+
 			if missing_mandatory:
 				print("Your Terra table is missing the following required attributes for SRA submission: " + str(missing_mandatory))
 
 			filtered_table_df = table[[col for col in table.columns if col in all_attributes]]
 			remove_nas(entity_id, filtered_table_df, mandatory_list)
-
 			filtered_table_df.columns = ['sra-' + col for col in filtered_table_df.columns]
 
-	
-			filtered_table_df["sra-file_1"].to_csv(f'{outdir}/filepaths.csv', index=False, header=False) 
+			filtered_table_df["sra-file_1"].to_csv(f'{outdir}/filepaths.csv', index=False, header=False)
 			if cloud_uri:
 				filtered_table_df["sra-file_1"] = filtered_table_df["sra-file_1"].map(lambda filename: filename.split('/').pop())
 				filtered_table_df["sra-file_1"] = filtered_table_df["sra-file_1"].map(lambda filename: cloud_uri + filename if pd.notna(filename) else filename)
-			if "sra-file_2" in filtered_table_df.columns:  
+			if "sra-file_2" in filtered_table_df.columns:
 				filtered_table_df["sra-file_2"].to_csv(f'{outdir}/filepaths.csv', mode='a', index=False, header=False)
 				if cloud_uri:
 					filtered_table_df["sra-file_2"] = filtered_table_df["sra-file_2"].map(lambda filename2: filename2.split('/').pop())
@@ -253,58 +264,99 @@ task prepare_seqsender_submission {
 
 		def filter_table_by_gisaid_cov(table, static_metadata, repository_column_map, entity_id, outdir) -> Tuple [pd.DataFrame, list, list]:
 			table = table.copy()
-			
-			mandatory_list = [entity_id, 'fasta_column', 'submission_id', 'sample_name', 'covv_type', 'covv_passage', 'covv_location', 'covv_host', 'covv_sampling_strategy', 'covv_gender', 'covv_patient_age', 'covv_seq_technology', 'covv_assembly_method', 'covv_coverage', 'covv_orig_lab', 'covv_orig_lab_addr', 'covv_subm_lab', 'covv_subm_lab_addr']
 
-			optional_list = ['covv_add_location', 'covv_add_host_info', 'covv_specimen', 'covv_outbreak', 'covv_last_vaccinated', 'covv_treatment', 'covv_provider_sample_id', 'covv_consortium','covv_subm_sample_id', 'covv_patient_status', 'covv_comment', 'comment_type']
-			
+			mandatory_list = [entity_id, 'fasta_column', 'submission_id', 'sample_name', 'covv_type', 'covv_passage',
+							'covv_location', 'covv_host', 'covv_sampling_strategy', 'covv_gender', 'covv_patient_age',
+							'covv_seq_technology', 'covv_assembly_method', 'covv_coverage', 'covv_orig_lab',
+							'covv_orig_lab_addr', 'covv_subm_lab', 'covv_subm_lab_addr']
+			optional_list = ['covv_add_location', 'covv_add_host_info', 'covv_specimen', 'covv_outbreak',
+							'covv_last_vaccinated', 'covv_treatment', 'covv_provider_sample_id', 'covv_consortium',
+							'covv_subm_sample_id', 'covv_patient_status', 'covv_comment', 'comment_type']
 			all_attributes = mandatory_list + optional_list
+
+			rename_dict = repository_column_map.set_index('terra')['gisaid'].dropna().to_dict()
+			table.rename(columns=rename_dict,inplace = True)
 
 			for index, row in static_metadata[static_metadata['db'].isin(['gs'])].iterrows():
 				table[row['key']] = row['value']
 
-			rename_dict = repository_column_map.set_index('terra')['gisaid'].dropna().to_dict()
-			columns_to_drop = [col for col in rename_dict.values() if col in table.columns and col not in rename_dict.keys()]
-			table.drop(columns=columns_to_drop, inplace=True)
-			table.rename(columns=rename_dict, inplace = True)
-
-			columns_needed = ['virus_prefix','submission_id', 'collection_date']
+			columns_needed = ['virus_prefix', 'submission_id', 'collection_date']
 			if all(column in table.columns for column in columns_needed):
-				table['sample_name'] = table.apply(format_gisaid_virus_name, axis = 1)
+				table['sample_name'] = table.apply(format_gisaid_virus_name, axis=1, result_type='reduce')
 
 			columns_needed = ['continent', 'country', 'state', 'county']
 			if all(column in table.columns for column in columns_needed):
-				table['covv_location'] = table.apply(format_location, axis = 1)
+				table['covv_location'] = table.apply(format_location, axis=1, result_type='reduce')
 
-			
 			missing_mandatory = list(set(mandatory_list) - set(table.columns))
 
 			if missing_mandatory:
-				print("Your Terra table is missing the following required attributes for GISAID covCLI submission: " + str(missing_mandatory))	
+				print("Your Terra table is missing the following required attributes for GISAID covCLI submission: " + str(missing_mandatory))
 
 			filtered_table_df = table[[col for col in table.columns if col in all_attributes]]
-
 			remove_nas(entity_id, filtered_table_df, mandatory_list)
-			
 			filtered_table_df.columns = ['gs-' + col for col in filtered_table_df.columns]
 			filtered_table_df[['gs-fasta_column', 'gs-submission_id']].to_csv(f'{outdir}/fasta_filepaths.csv', index=False, header=False)
 
 			return filtered_table_df, missing_mandatory, mandatory_list
 
+		def filter_table_by_genbank(table, static_metadata, repository_column_map, entity_id) -> Tuple[pd.DataFrame, list, list]:
+			table = table.copy()
+
+			mandatory_list = [entity_id, 'gb-sample_name', 'src-geo_loc_name', 'src-Isolate',
+							'src-Isolation-source']
+
+			optional_list = ['gb-fasta_definition_line_modifiers', 'gb-title', 'gb-comment',
+							'src-Altitude', 'src-Bio_material', 'src-Breed', 'src-Cell_line',
+							'src-Cell_type', 'src-Clone', 'src-Collected_by', 'src-Cultivar',
+							'src-Culture_collection', 'src-Dev_stage', 'src-Ecotype',
+							'src-Fwd_primer_name', 'src-Fwd_primer_seq', 'src-Genotype',
+							'src-Haplogroup', 'src-Haplotype', 'src-Lab_host', 'src-Host',
+							'src-Lat_Lon', 'src-Note', 'src-Rev_primer_name', 'src-Rev_primer_seq',
+							'src-Segment', 'src-Serotype', 'src-Serovar', 'src-Sex',
+							'src-Specimen_voucher', 'src-Strain', 'src-Sub_species',
+							'src-Tissue_lib', 'src-Tissue_type', 'src-Variety', 'cmt-StructuredCommentPrefix',
+							'cmt-StructuredCommentSuffix', 'cmt-Assembly Method']
+
+			all_attributes = mandatory_list + optional_list
+
+			rename_dict = repository_column_map.set_index('terra')['genbank'].dropna().to_dict()
+			table.rename(columns=rename_dict, inplace=True)
+
+			for index, row in static_metadata[static_metadata['db'].isin(['gb'])].iterrows():
+				table[row['key']] = row['value']
+
+			for index, row in static_metadata[static_metadata['db'].isin(['src'])].iterrows():
+				table[row['key']] = row['value']
+
+			columns_needed = ['isolate_prefix','gb-sample_name', 'collection_date']
+			#print(table.columns)
+			if all(column in table.columns for column in columns_needed):
+				table['src-Isolate'] = table.apply(format_genbank_isolate, axis = 1, result_type='reduce')
+
+			missing_mandatory = list(set(mandatory_list) - set(table.columns))
+
+			if missing_mandatory:
+				print("Your Terra table is missing the following required attributes for GenBank submission: " + str(missing_mandatory))
+
+			filtered_table_df = table[[col for col in table.columns if col in all_attributes]]
+			remove_nas(entity_id, filtered_table_df, mandatory_list)
+			# Only rename entity_id; seqsender column names already carry their own prefixes (gb-/src-/cmt-)
+			filtered_table_df.rename(columns={entity_id: f'gb-{entity_id}'}, inplace=True)
+			return filtered_table_df, missing_mandatory, mandatory_list
+
 		def filter_table_by_shared(table, static_metadata, repository_column_map, entity_id) -> Tuple [pd.DataFrame, list, list]:
 			table = table.copy()
 
-			mandatory_list = [entity_id,'sequence_name','authors','collection_date']
+			mandatory_list = [entity_id, 'sequence_name', 'authors', 'collection_date']
 			optional_list = ['organism', 'bioproject']
 			all_attributes = mandatory_list + optional_list
 
+			rename_dict = repository_column_map.set_index('terra')['gen'].dropna().to_dict()
+			table.rename(columns=rename_dict,inplace = True)
+
 			for index, row in static_metadata[static_metadata['db'].isin(['gen'])].iterrows():
 				table[row['key']] = row['value']
-
-			rename_dict = repository_column_map.set_index('terra')['gen'].dropna().to_dict()
-			columns_to_drop = [col for col in rename_dict.values() if col in table.columns and col not in rename_dict.keys()]
-			table.drop(columns=columns_to_drop, inplace=True)
-			table.rename(columns=rename_dict, inplace = True)
 
 			missing_mandatory = list(set(mandatory_list) - set(table.columns))
 
@@ -365,6 +417,11 @@ task prepare_seqsender_submission {
 			~{true='table = check_coverage(table)' false='' check_coverage}
 			~{true='table = check_contigs(table)' false='' check_contigs}
 			~{true='table = check_seq_length(table)' false='' check_seq_length}
+
+			if table.empty:
+				print("No samples passed quality filters. Exiting without preparing submission metadata.")
+				sys.exit(0)
+
 			print(table)
 			static_metadata = pd.read_csv(static_metadata_file, delimiter=',', header=0)
 			repository_column_map = pd.read_csv(repository_column_map_file, delimiter=',', header=0)
@@ -373,40 +430,55 @@ task prepare_seqsender_submission {
 			if 'bs' in db_selection:
 				biosample_filtered_table, missing_biosample, mandatory_biosample_list = filter_table_by_biosample(table, biosample_schema, static_metadata, repository_column_map, entity_id)
 				print(f"Missing Biosample fields: {missing_biosample}")
-				biosample_filtered_table.to_csv(f'{outdir}/biosample_table.csv', header = True, index = False, sep = ",")
+				biosample_filtered_table.to_csv(f'{outdir}/biosample_table.csv', header=True, index=False, sep=",")
+
 			if 'sra' in db_selection:
 				sra_filtered_table, missing_sra, mandatory_sra_list = filter_table_by_sra(table, static_metadata, repository_column_map, entity_id, outdir, cloud_uri)
 				print(f"Missing SRA fields: {missing_sra}")
-				sra_filtered_table.to_csv(f'{outdir}/sra_table.csv', header = True, index = False, sep = ",")
+				sra_filtered_table.to_csv(f'{outdir}/sra_table.csv', header=True, index=False, sep=",")
+
 			if 'gs' in db_selection:
 				gisaid_filtered_table, missing_gisaid, mandatory_gisaid_list = filter_table_by_gisaid_cov(table, static_metadata, repository_column_map, entity_id, outdir)
 				print(f"Missing GISAID fields: {missing_gisaid}")
-				gisaid_filtered_table.to_csv(f'{outdir}/gisaid_table.csv', header = True, index = False, sep = ",")
+				gisaid_filtered_table.to_csv(f'{outdir}/gisaid_table.csv', header=True, index=False, sep=",")
+
+			if 'gb' in db_selection:
+				genbank_filtered_table, missing_genbank, mandatory_genbank_list = filter_table_by_genbank(table, static_metadata, repository_column_map, entity_id)
+				print(f"Missing GenBank fields: {missing_genbank}")
+				genbank_filtered_table.to_csv(f'{outdir}/genbank_table.csv', header=True, index=False, sep=",")
+
 			shared_filtered_table, missing_shared, mandatory_shared_list = filter_table_by_shared(table, static_metadata, repository_column_map, entity_id)
 			print(f"Missing Shared fields: {missing_shared}")
-			shared_filtered_table.to_csv(f'{outdir}/shared_table.csv', header = True, index = False, sep = ",")
+			shared_filtered_table.to_csv(f'{outdir}/shared_table.csv', header=True, index=False, sep=",")
 
-	
-			if 'gs' in db_selection and 'bs' not in db_selection and 'sra' not in db_selection:
-				merged_metadata_tables = pd.merge(shared_filtered_table, gisaid_filtered_table, left_on=entity_id, right_on = f'gs-{entity_id}', how='outer')
-			elif 'bs' in db_selection and 'gs' not in db_selection and 'sra' not in db_selection:
-				merged_metadata_tables = pd.merge(shared_filtered_table, biosample_filtered_table, left_on=entity_id, right_on = f'gs-{entity_id}', how='outer')
-			elif 'sra' in db_selection and 'gs' not in db_selection and 'bs' not in db_selection:
-				merged_metadata_tables = pd.merge(shared_filtered_table, sra_filtered_table, left_on=entity_id, right_on = f'gs-{entity_id}', how='outer')
-			elif 'gs' not in db_selection and 'bs' in db_selection and 'sra' in db_selection:
-				merged_metadata_tables1 = pd.merge(shared_filtered_table, biosample_filtered_table, left_on=entity_id, right_on = f'bs-{entity_id}', how='outer')
-				merged_metadata_tables = pd.merge(merged_metadata_tables1, sra_filtered_table, left_on=entity_id, right_on = f'sra-{entity_id}', how='outer')
-			elif 'gs' in db_selection and 'bs' in db_selection and 'sra' in db_selection:
-				merged_metadata_tables1 = pd.merge(shared_filtered_table, biosample_filtered_table, left_on=entity_id, right_on = f'bs-{entity_id}', how='outer')
-				merged_metadata_tables2 = pd.merge(merged_metadata_tables1, sra_filtered_table, left_on=entity_id, right_on = f'sra-{entity_id}', how='outer')
-				merged_metadata_tables = pd.merge(merged_metadata_tables2, gisaid_filtered_table, left_on=entity_id, right_on = f'gs-{entity_id}', how='outer')
-			else:
-				print('Something seems to be wrong here')
+			db_table_map = []
+			if 'bs' in db_selection:
+				db_table_map.append(('bs', biosample_filtered_table))
+			if 'sra' in db_selection:
+				db_table_map.append(('sra', sra_filtered_table))
+			if 'gs' in db_selection:
+				db_table_map.append(('gs', gisaid_filtered_table))
+			if 'gb' in db_selection:
+				db_table_map.append(('gb', genbank_filtered_table))
+
+			merged_metadata_tables = shared_filtered_table
+			for prefix, db_table in db_table_map:
+				merged_metadata_tables = pd.merge(
+					merged_metadata_tables, db_table,
+					left_on=entity_id, right_on=f'{prefix}-{entity_id}',
+					how='outer'
+				)
 
 
 			columns_to_remove = [f'gs-{entity_id}', f'bs-{entity_id}', entity_id, f'sra-{entity_id}', 'gs-fasta_column', 'gs-submission_id']
 			columns_to_remove = [col for col in columns_to_remove if col in merged_metadata_tables.columns]
 			merged_metadata_tables.drop(columns=columns_to_remove, inplace=True)
+
+			#todo: figure out why organism column is duplicating
+    		merged_metadata_tables = merged_metadata_tables.loc[:, ~merged_metadata_tables.columns.duplicated()]
+
+			if 'bs-sample_title' not in merged_metadata_tables.columns:
+				merged_metadata_tables['bs-sample_title'] = merged_metadata_tables[['organism', 'collection_date']].astype(str).agg(' - '.join, axis=1)
 
 			merged_metadata_tables.to_csv(f'{outdir}/merged_metadata.csv', header = True, index = False, sep = ",")
 
