@@ -7,6 +7,7 @@ workflow seqsender {
 		Boolean submit_to_biosample = false
 		Boolean submit_to_sra = false
 		Boolean submit_to_gisaid = false
+		Boolean submit_to_genbank = false
 		String organism = "COV"
 		String submission_dir = "/data"
 		String submission_name = "public_health"
@@ -30,6 +31,7 @@ workflow seqsender {
 				submit_to_biosample = submit_to_biosample,
 				submit_to_sra = submit_to_sra,
 				submit_to_gisaid = submit_to_gisaid,
+				submit_to_genbank = submit_to_genbank,
 				organism = organism,
 				submission_dir = submission_dir,
 				submission_name = submission_name,
@@ -142,6 +144,9 @@ task seqsender_submit {
 	Boolean submit_to_gisaid
 	# true --gisaid
 	# false ''
+	Boolean submit_to_genbank
+	# true --genbank
+	# false ''
 	String organism
 	String submission_dir
 	String submission_name
@@ -169,6 +174,7 @@ task seqsender_submit {
 		~{true='--biosample' false='' submit_to_biosample} \
 		~{true='--sra' false='' submit_to_sra} \
 		~{true='--gisaid' false='' submit_to_gisaid} \
+		~{true='--genbank' false='' submit_to_genbank} \
 		--organism "~{organism}" \
 		--submission_dir "~{submission_dir}" \
 		--submission_name "~{submission_name}" \
