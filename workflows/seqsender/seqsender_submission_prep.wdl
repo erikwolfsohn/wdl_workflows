@@ -250,6 +250,13 @@ task prepare_seqsender_submission {
 			remove_nas(entity_id, filtered_table_df, mandatory_list)
 			filtered_table_df.columns = ['sra-' + col for col in filtered_table_df.columns]
 
+			#at some point let this handle multiple runs per experiment in case it ever comes up
+			if 'sra-sample_name' in filtered_table_df.columns:
+				filtered_table_df['sra-sample_name'] = filtered_table_df['sra-sample_name'].astype(str) + '_01'
+
+			if 'sra-library_name' in filtered_table_df.columns:
+				filtered_table_df['sra-library_name'] = filtered_table_df['sra-library_name'].astype(str) + '_01'
+
 			filtered_table_df["sra-file_1"].to_csv(f'{outdir}/filepaths.csv', index=False, header=False)
 			if cloud_uri:
 				filtered_table_df["sra-file_1"] = filtered_table_df["sra-file_1"].map(lambda filename: filename.split('/').pop())
